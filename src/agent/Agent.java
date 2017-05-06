@@ -15,12 +15,14 @@ public class Agent {
     private int relativeCoordX, relativeCoordY;
     private char relativeAgentOrientation;
 
+    boolean hasGold, hasKey, hasAxe, hasRaft;
+    int dynamiteCount;
+
     private ArrayList<Character> moveBuffer;
-    private ArrayList<Boolean> inventory;
 
     private Stage currentStage;
 
-    private ArrayList<Coordinate> blockadesRemoved;
+    private HashSet<Coordinate> blockadesRemoved;
 
     private enum Stage {
         EXPLORE, COLLECT, RETURN
@@ -32,32 +34,34 @@ public class Agent {
         relativeCoordY = 0;
         relativeAgentOrientation = 'S'; // we don't know which way we're facing, so just call the initial direction south
         moveBuffer = new ArrayList<>();
-        inventory = new ArrayList<>(Arrays.asList(false, false, false, false, false));  // gold, key, dynamite, axe, raft
+
         currentStage = Stage.EXPLORE;
-        blockadesRemoved = new ArrayList<>(); //  doors opened, walls blown up, trees cut down
+        blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
     }
 
     private boolean explore() {
-        State unexploredTile = Explore.findUnexploredTile(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved), worldModel, relativeCoordX, relativeCoordY, inventory);
+        State unexploredTile = Explore.findUnexploredTile(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved), worldModel, relativeCoordX, relativeCoordY, hasKey);
 
         if (unexploredTile == null) {
             currentStage = Stage.COLLECT;
-            return true;
+            return false;
         }
 
         ArrayList<State> path = Explore.findPath(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved), new Coordinate(unexploredTile.getRelativeCoordX(), unexploredTile.getRelativeCoordY()),
                 worldModel,
                 new ArrayList<>(),
-                inventory);
+                hasKey);
+
+        System.out.println(path);
 
         ArrayList<Character> actions = Explore.generateActions(path);
-        //System.out.println(actions);
+        System.out.println(actions);
         moveBuffer = actions;
         if (moveBuffer.isEmpty()) {
             currentStage = Stage.COLLECT;
-            return true;
+            return false;
         }
-        return false;
+        return true;
     }
 
     private boolean collect() {
@@ -65,53 +69,60 @@ public class Agent {
         ArrayList<Character> allowedItemPickups = new ArrayList<>();    // list of items the agent is allowed to pick up
         for (Character objectType : objects) {                  // for each object type
             allowedItemPickups.add(objectType);
-            //System.out.println(objectType);
+            System.out.println(objectType);
             ArrayList<Coordinate> tiles = worldModel.getObjectsTiles(objectType);     // find all tiles containing given object
-            //System.out.println(tiles);
+            System.out.println(tiles);
             if (!tiles.isEmpty()) {                             // if a tile containing given object type was found
                 for (Coordinate coordinate : tiles) {                     // check each tile found to see if there is a path there from current position
-                    //System.out.println(state);
+                    System.out.println(coordinate);
                     if (coordinate.x == relativeCoordX && coordinate.y == relativeCoordY) {
-                        continue;
-                    }
+                        continue;   // the world model doesn't get updated until the agent actually moves, so when the agent picks up an item, the world model thinks the item is still there
+                    }               // this makes sure the agent actually moves after picking up an item to allow the world model to update
                     ArrayList<State> path = Explore.findPath(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved),
                             coordinate,
                             worldModel,
                             allowedItemPickups,
-                            inventory);
+                            hasKey);
                     if (path.size() != 0) {     // if the returned path is not empty, a path was found
                         ArrayList<Character> actions = Explore.generateActions(path);
                         //System.out.println(actions);
                         moveBuffer = actions;
                         System.out.println("MOVEBUFFER " + moveBuffer);
-                        return false;
+                        System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
+                        System.out.println(objectType + " " + coordinate + " " + path);
+                        currentStage = Stage.EXPLORE;
+                        return true;
                     }
                 }
             }
         }
         currentStage = Stage.EXPLORE;
-        return true;
+        return false;
     }
 
     public char get_action( char view[][] ) {
         worldModel.updateWorldModel(view, relativeCoordX, relativeCoordY, relativeAgentOrientation);
 
+
         if (moveBuffer.isEmpty()) {
             while (true) {
-                boolean stateChanged = false;
+                System.out.println(currentStage);
+                boolean updatedMoveBuffer = false;
                 switch (currentStage) {
                     case EXPLORE:
-                        stateChanged = explore();
+                        updatedMoveBuffer = explore();
                         break;
                     case COLLECT:
-                        stateChanged = collect();
+                        updatedMoveBuffer = collect();
                         break;
                     case RETURN:
                         break;
                 }
-                if (!stateChanged) {
+                if (updatedMoveBuffer) {
+                    System.out.println("Updated buffer");
                     break;
                 }
+                System.out.println("Did not update buffer");
             }
         }
 
@@ -122,20 +133,20 @@ public class Agent {
         switch( ch ) { // if character is a valid action, return it
             case 'F':
             case 'f':
-                if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, new ArrayList<>(Arrays.asList('k')), blockadesRemoved)) {
+                //if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, getAllowedItemPickups(), blockadesRemoved)) {
                     char objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
                     switch (objectInFront) {
                         case '$':
-                            inventory.set(0, true);
+                            hasGold = true;
                             break;
                         case 'k':
-                            inventory.set(1, true);
+                            hasKey = true;
                             break;
                         case 'd':
-                            inventory.set(2, true);
+                            dynamiteCount++;
                             break;
                         case 'a':
-                            inventory.set(3, true);
+                            hasAxe = true;
                             break;
                     }
                     switch (relativeAgentOrientation) {
@@ -152,7 +163,7 @@ public class Agent {
                             relativeCoordX++;
                             break;
                     }
-                }
+                //}
                 return ch;
             case 'L':
             case 'l':
@@ -190,7 +201,7 @@ public class Agent {
                 return ch;
             case 'U':
             case 'u':
-                char objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
+                objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
                 if (objectInFront == '-') {
                     Coordinate c = null;
                     switch (relativeAgentOrientation) {

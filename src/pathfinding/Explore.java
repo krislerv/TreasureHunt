@@ -14,7 +14,7 @@ public class Explore {
      * @param currentState The current state of the agent
      * @return A state in an unexplored tile
      */
-    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, ArrayList<Boolean> inventory) {
+    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean hasKey) {
         System.out.println("DFS");
         HashSet<State> discovered = new HashSet<>();
         Stack<State> stack = new Stack<>();
@@ -25,10 +25,10 @@ public class Explore {
         while (!stack.isEmpty()) {
             currentState = stack.pop();
             if (worldModel.unexplored(currentState) && !(currentState.getRelativeCoordX() == relativeCoordX && currentState.getRelativeCoordY() == relativeCoordY)) {
-                System.out.println("Found unexplored tile " + currentState);
+                System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
                 return currentState;
             }
-            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel, inventory);
+            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel, hasKey);
             for (State state : neighborStates) {
                 if (!discovered.contains(state)) {
                     discovered.add(state);
@@ -43,7 +43,7 @@ public class Explore {
     }
 
     public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel) {
-        return findPath(startState, goalState, worldModel, new ArrayList<>(), new ArrayList<>());
+        return findPath(startState, goalState, worldModel, new ArrayList<>(), false);
     }
 
     /**
@@ -52,7 +52,7 @@ public class Explore {
      * @param goalState a goal state coordinate
      * @return a list of states, from the start state to the goal state
      */
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, ArrayList<Character> allowedItemPickups, ArrayList<Boolean> inventory) {
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, ArrayList<Character> allowedItemPickups, boolean hasKey) {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
 
@@ -86,7 +86,7 @@ public class Explore {
             }
             openSet.remove(currentState);
             closedSet.add(currentState);
-            ArrayList<State> neighborStates = currentState.generateAStarNeighbors(worldModel, allowedItemPickups, inventory);
+            ArrayList<State> neighborStates = currentState.generateAStarNeighbors(worldModel, allowedItemPickups, hasKey);
                     //currentState.generateAStarNeighbors(  worldModel.agentBlocked(currentState.getRelativeCoordX(), currentState.getRelativeCoordY(), currentState.getRelativeAgentOrientation(), allowedItemPickups),
                     //                                                               worldModel.getObjectInFront(currentState.getRelativeCoordX(), currentState.getRelativeCoordY(), currentState.getRelativeAgentOrientation()),
                     //                                                                inventory);

@@ -5,6 +5,7 @@ import pathfinding.State;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 
 public class WorldModel {
 
@@ -36,7 +37,7 @@ public class WorldModel {
                 world.get(baseCoordY + relativeCoordY + i - 2).set(baseCoordX + relativeCoordX + j - 2, view[i][j]);
             }
         }
-        printWorld();
+        printWorld(relativeCoordX, relativeCoordY, relativeAgentOrientation);
     }
 
     public char[][] rotateView(char[][] view, char relativeAgentOrientation) {
@@ -71,12 +72,8 @@ public class WorldModel {
     return view;
     }
 
-    public boolean agentBlocked(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
-        return agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, new ArrayList<>(), new ArrayList<>());
-    }
-
-    public boolean agentBlocked(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, ArrayList<Character> allowedItemPickups, ArrayList<Coordinate> blockadesRemoved) {
-        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '$', 'k', 'd', 'a'));
+    public boolean agentBlocked(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, ArrayList<Character> allowedItemPickups, HashSet<Coordinate> blockadesRemoved) {
+        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '?', '$', 'k', 'd', 'a'));
         blockades.removeAll(allowedItemPickups);
         switch (relativeAgentOrientation) {
             case 'N':
@@ -100,10 +97,27 @@ public class WorldModel {
     }
 
 
-    public void printWorld() {
-        for (ArrayList<Character> line : world) {
-            for (Character c : line) {
-                System.out.print(c);
+    public void printWorld(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
+        for (int i = 0; i < WORLD_HEIGHT; i++) {
+            for (int j = 0; j < WORLD_WIDTH; j++) {
+                if (baseCoordY + relativeCoordY == i && baseCoordX + relativeCoordX == j) {
+                    switch (relativeAgentOrientation) {
+                        case 'N':
+                            System.out.print("^");
+                            break;
+                        case 'W':
+                            System.out.print("<");
+                            break;
+                        case 'S':
+                            System.out.print("v");
+                            break;
+                        case 'E':
+                            System.out.print(">");
+                            break;
+                    }
+                } else {
+                    System.out.print(world.get(i).get(j));
+                }
             }
             System.out.println();
         }

@@ -20,4 +20,9 @@ public class Coordinate {
         return x == ((Coordinate) other).x && y == ((Coordinate) other).y;
     }
 
+    @Override
+    public int hashCode() {
+        return 887 * x + 1031 * y;
+    }
+
 }

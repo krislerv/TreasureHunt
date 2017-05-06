@@ -3,7 +3,7 @@ package pathfinding;
 import agent.WorldModel;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashSet;
 
 public class State implements Comparable<State> {
 	
@@ -14,24 +14,23 @@ public class State implements Comparable<State> {
 	
 	private State parent;
 
-	private ArrayList<Coordinate> blockadesRemoved;
+	private HashSet<Coordinate> blockadesRemoved;
 
 	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
 		this.relativeCoordX = relativeCoordX;
 		this.relativeCoordY = relativeCoordY;
 		this.relativeAgentOrientation = relativeAgentOrientation;
-        blockadesRemoved = new ArrayList<>(); //  doors opened, walls blown up, trees cut down
+        blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
 	}
 
-	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, ArrayList<Coordinate> blockadesRemoved) {
+	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved) {
         this(relativeCoordX, relativeCoordY, relativeAgentOrientation);
-	    for (int i = 0; i < blockadesRemoved.size(); i++) {
-            Coordinate c = blockadesRemoved.get(i);
+        for (Coordinate c : blockadesRemoved) {
             this.blockadesRemoved.add(new Coordinate(c.x, c.y));
         }
     }
 
-    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, ArrayList<Coordinate> blockadesRemoved, Coordinate newDoorUnlock) {
+    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock) {
 	    this(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved);
         this.blockadesRemoved.add(newDoorUnlock);
     }
@@ -48,19 +47,19 @@ public class State implements Comparable<State> {
 	    return relativeAgentOrientation;
     }
 
-    public ArrayList<State> generateNeighbors(WorldModel worldModel, ArrayList<Boolean> inventory) {
+    public ArrayList<State> generateNeighbors(WorldModel worldModel, boolean hasKey) {
         //System.out.println(inventory.get(1));
         ArrayList<State> newStates = new ArrayList<>();
-        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, inventory.get(1))) {
+        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey)) {
             newStates.add(new State(relativeCoordX - 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, inventory.get(1))) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey)) {
             newStates.add(new State(relativeCoordX, relativeCoordY - 1, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, inventory.get(1))) {
+        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey)) {
             newStates.add(new State(relativeCoordX + 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, inventory.get(1))) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey)) {
             newStates.add(new State(relativeCoordX, relativeCoordY + 1, 'N'));
         }
         return newStates;
@@ -81,12 +80,19 @@ public class State implements Comparable<State> {
 
     @Override
     public int hashCode() {
-	    return 2399 * relativeCoordX + 2083 * relativeCoordY + 1889 * relativeAgentOrientation;
+	    int blockadesRemovedSum = 0;
+	    for (Coordinate c : blockadesRemoved) {
+	        blockadesRemovedSum += c.hashCode();
+        }
+	    return 2399 * relativeCoordX + 2083 * relativeCoordY + 1889 * relativeAgentOrientation + blockadesRemovedSum;
     }
 
     @Override
     public boolean equals(Object object) {
-	    /*for (Coordinate c : blockadesRemoved) {
+        /*if (blockadesRemoved.size() != ((State)object).blockadesRemoved.size()) {
+	        return false;
+        }
+	    for (Coordinate c : blockadesRemoved) {
 	        if (!((State)object).blockadesRemoved.contains(c)) {
 	            return false;
             }
@@ -129,7 +135,7 @@ public class State implements Comparable<State> {
         }
     }
 
-    public ArrayList<State> generateAStarNeighbors(WorldModel worldModel, ArrayList<Character> allowedItemPickups, ArrayList<Boolean> inventory) {//, char objectInFront, ArrayList<Boolean> inventory) {
+    public ArrayList<State> generateAStarNeighbors(WorldModel worldModel, ArrayList<Character> allowedItemPickups, boolean hasKey) {//, char objectInFront, ArrayList<Boolean> inventory) {
         ArrayList<State> newStates = new ArrayList<>();
         switch (relativeAgentOrientation) {
             case 'N':
@@ -143,7 +149,7 @@ public class State implements Comparable<State> {
                 newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved));
                 break;
         }
-        if (inventory.size() != 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-' && inventory.get(1)) {
+        if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-') {
             switch (relativeAgentOrientation) {
                 case 'N':
                     newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY - 1)));
