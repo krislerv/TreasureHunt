@@ -2,10 +2,7 @@ package pathfinding;
 
 import agent.WorldModel;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Stack;
+import java.util.*;
 
 public class Explore {
 
@@ -28,7 +25,7 @@ public class Explore {
                 System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
                 return currentState;
             }
-            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel, hasKey);
+            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel);
             for (State state : neighborStates) {
                 if (!discovered.contains(state)) {
                     discovered.add(state);
@@ -42,8 +39,30 @@ public class Explore {
         return null;
     }
 
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel) {
-        return findPath(startState, goalState, worldModel, new ArrayList<>(), false);
+    public static State findUnexploredTile2(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY) {
+        System.out.println("BFS");
+        HashSet<State> discovered = new HashSet<>();
+        ArrayList<State> queue = new ArrayList<>();
+
+        discovered.add(currentState);
+        queue.add(currentState);
+
+        while (!queue.isEmpty()) {
+            currentState = queue.remove(0);
+            if (worldModel.unexplored(currentState) && !(currentState.getRelativeCoordX() == relativeCoordX && currentState.getRelativeCoordY() == relativeCoordY)) {
+                System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
+                return currentState;
+            }
+            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel);
+            for (State state : neighborStates) {
+                if (!discovered.contains(state)) {
+                    discovered.add(state);
+                    state.setParent(currentState);
+                    queue.add(state);
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -52,7 +71,7 @@ public class Explore {
      * @param goalState a goal state coordinate
      * @return a list of states, from the start state to the goal state
      */
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, ArrayList<Character> allowedItemPickups, boolean hasKey) {
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel) {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
 
@@ -86,10 +105,7 @@ public class Explore {
             }
             openSet.remove(currentState);
             closedSet.add(currentState);
-            ArrayList<State> neighborStates = currentState.generateAStarNeighbors(worldModel, allowedItemPickups, hasKey);
-                    //currentState.generateAStarNeighbors(  worldModel.agentBlocked(currentState.getRelativeCoordX(), currentState.getRelativeCoordY(), currentState.getRelativeAgentOrientation(), allowedItemPickups),
-                    //                                                               worldModel.getObjectInFront(currentState.getRelativeCoordX(), currentState.getRelativeCoordY(), currentState.getRelativeAgentOrientation()),
-                    //                                                                inventory);
+            ArrayList<State> neighborStates = currentState.generateAStarNeighbors(worldModel, currentState.getBlockadesRemoved());
             for (State state : neighborStates) {
                 if (closedSet.contains(state)) {
                     continue;
@@ -99,7 +115,7 @@ public class Explore {
                     openSet.add(state);
                 } else {
                     for (State ss : openSet) {  // if we generate a duplicate state, make sure we use the old one
-                        if (ss.getRelativeCoordX() == state.getRelativeCoordX() && ss.getRelativeCoordY() == state.getRelativeCoordY() && ss.getRelativeAgentOrientation() == state.getRelativeAgentOrientation()) {
+                        if (ss.getRelativeCoordX() == state.getRelativeCoordX() && ss.getRelativeCoordY() == state.getRelativeCoordY()) {
                             state = ss;
                             break;
                         }
@@ -122,7 +138,7 @@ public class Explore {
      * @param path the path the agent is supposed to move along
      * @return a list of characters indicating the moves the agent should make
      */
-    public static ArrayList<Character> generateActions(ArrayList<State> path) {
+    public static ArrayList<Character> generateActions(ArrayList<State> path) {//, char currentAgentOrientation, WorldModel worldModel) {
         ArrayList<Character> actions = new ArrayList<>();
         for (int i = 0; i < path.size() - 1; i++) {
             State fromState = path.get(i);
@@ -143,6 +159,76 @@ public class Explore {
             }
         }
         return actions;
+        /*System.out.println(path);
+        ArrayList<Character> directions = new ArrayList<>(Arrays.asList('N', 'W', 'S', 'E'));
+        HashMap<Character, Integer> xOffset = new HashMap<>();
+        xOffset.put('N', 0);
+        xOffset.put('W', -1);
+        xOffset.put('S', 0);
+        xOffset.put('E', 1);
+        HashMap<Character, Integer> yOffset = new HashMap<>();
+        yOffset.put('N', -1);
+        yOffset.put('W', 0);
+        yOffset.put('S', 1);
+        yOffset.put('E', 0);
+        ArrayList<Character> actions = new ArrayList<>();
+        for (int i = 0; i < path.size() - 1; i++) {
+            State fromState = path.get(i);
+            State toState = path.get(i + 1);
+
+            int xDiff = toState.getRelativeCoordX() - fromState.getRelativeCoordX();
+            int yDiff = toState.getRelativeCoordY() - fromState.getRelativeCoordY();
+
+            char newDirection = 0;
+
+            if (xDiff == -1) {
+                newDirection = 'W';
+            } else if (xDiff == 1) {
+                newDirection = 'E';
+            } else if (yDiff == -1) {
+                newDirection = 'N';
+            } else if (yDiff == 1) {
+                newDirection = 'S';
+            }
+            if (xDiff == 0 && yDiff == 0) {
+                char objectInFront = worldModel.getObjectAtCoordinate(fromState.getRelativeCoordX() + xOffset.get(currentAgentOrientation), fromState.getRelativeCoordY() + yOffset.get(currentAgentOrientation));
+                if (objectInFront == '-') {
+                    actions.add('u');
+                } else if (objectInFront == 'T') {
+                    actions.add('c');
+                } else if (objectInFront == '*') {
+                    actions.add('b');
+                }
+            } else {
+                int directionDifference = directions.indexOf(newDirection) - directions.indexOf(currentAgentOrientation);
+
+                if (directionDifference == 0) {
+                    actions.add('f');
+                } else if (directionDifference == 1) {
+                    actions.add('l');
+                    actions.add('f');
+                } else if (directionDifference == 2) {
+                    actions.add('l');
+                    actions.add('l');
+                    actions.add('f');
+                } else if (directionDifference == 3) {
+                    actions.add('r');
+                    actions.add('f');
+                } else if (directionDifference == -1) {
+                    actions.add('r');
+                    actions.add('f');
+                } else if (directionDifference == -2) {
+                    actions.add('r');
+                    actions.add('r');
+                    actions.add('f');
+                } else if (directionDifference == -3) {
+                    actions.add('l');
+                    actions.add('f');
+                }
+                currentAgentOrientation = newDirection;
+            }
+        }
+        return actions;*/
     }
 
 }

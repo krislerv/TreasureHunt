@@ -7,10 +7,13 @@ import java.util.HashSet;
 
 public class State implements Comparable<State> {
 	
-	private final char relativeAgentOrientation;
 	private final int relativeCoordX, relativeCoordY;
+	private final char relativeAgentOrientation;
 
 	private int f, g, h;
+
+    private boolean hasGold, hasKey, hasAxe, hasRaft;
+    private int dynamiteCount;
 	
 	private State parent;
 
@@ -23,15 +26,20 @@ public class State implements Comparable<State> {
         blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
 	}
 
-	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved) {
+	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, int dynamiteCount) {
         this(relativeCoordX, relativeCoordY, relativeAgentOrientation);
         for (Coordinate c : blockadesRemoved) {
             this.blockadesRemoved.add(new Coordinate(c.x, c.y));
         }
+        this.hasGold = hasGold;
+        this.hasKey = hasKey;
+        this.hasAxe = hasAxe;
+        this.hasRaft = hasRaft;
+        this.dynamiteCount = dynamiteCount;
     }
 
-    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock) {
-	    this(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved);
+    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, int dynamiteCount) {
+	    this(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount);
         this.blockadesRemoved.add(newDoorUnlock);
     }
 
@@ -47,19 +55,22 @@ public class State implements Comparable<State> {
 	    return relativeAgentOrientation;
     }
 
-    public ArrayList<State> generateNeighbors(WorldModel worldModel, boolean hasKey) {
-        //System.out.println(inventory.get(1));
+    public HashSet<Coordinate> getBlockadesRemoved() {
+	    return blockadesRemoved;
+    }
+
+    public ArrayList<State> generateNeighbors(WorldModel worldModel) {
         ArrayList<State> newStates = new ArrayList<>();
-        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey)) {
+        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey, new HashSet<>())) {
             newStates.add(new State(relativeCoordX - 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey)) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey, new HashSet<>())) {
             newStates.add(new State(relativeCoordX, relativeCoordY - 1, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey)) {
+        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey, new HashSet<>())) {
             newStates.add(new State(relativeCoordX + 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey)) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey, new HashSet<>())) {
             newStates.add(new State(relativeCoordX, relativeCoordY + 1, 'N'));
         }
         return newStates;
@@ -75,7 +86,7 @@ public class State implements Comparable<State> {
 
 	@Override
 	public String toString() {
-		return "(" + relativeCoordX + ", " + relativeCoordY + ", " + relativeAgentOrientation + ")";
+		return "(" + relativeCoordX + ", " + relativeCoordY + ")";
 	}
 
     @Override
@@ -135,52 +146,82 @@ public class State implements Comparable<State> {
         }
     }
 
-    public ArrayList<State> generateAStarNeighbors(WorldModel worldModel, ArrayList<Character> allowedItemPickups, boolean hasKey) {//, char objectInFront, ArrayList<Boolean> inventory) {
+    public ArrayList<State> generateAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved) {
         ArrayList<State> newStates = new ArrayList<>();
         switch (relativeAgentOrientation) {
             case 'N':
             case 'S':
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'W', blockadesRemoved));
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'E', blockadesRemoved));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'W', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'E', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                 break;
             case 'W':
             case 'E':
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'N', blockadesRemoved));
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'N', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                 break;
         }
         if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-') {
             switch (relativeAgentOrientation) {
                 case 'N':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY - 1)));
+                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY - 1), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
                 case 'W':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX - 1, relativeCoordY)));
+                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX - 1, relativeCoordY), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
                 case 'S':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY + 1)));
+                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY + 1), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
                 case 'E':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX + 1, relativeCoordY)));
+                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX + 1, relativeCoordY), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
             }
         }
-        if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, allowedItemPickups, blockadesRemoved)) {
+        if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
             switch (relativeAgentOrientation) {
                 case 'N':
-                    newStates.add(new State(relativeCoordX, relativeCoordY - 1, relativeAgentOrientation, blockadesRemoved));
+                    newStates.add(new State(relativeCoordX, relativeCoordY - 1, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
                 case 'W':
-                    newStates.add(new State(relativeCoordX - 1, relativeCoordY, relativeAgentOrientation, blockadesRemoved));
+                    newStates.add(new State(relativeCoordX - 1, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
                 case 'S':
-                    newStates.add(new State(relativeCoordX, relativeCoordY + 1, relativeAgentOrientation, blockadesRemoved));
+                    newStates.add(new State(relativeCoordX, relativeCoordY + 1, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
                 case 'E':
-                    newStates.add(new State(relativeCoordX + 1, relativeCoordY, relativeAgentOrientation, blockadesRemoved));
+                    newStates.add(new State(relativeCoordX + 1, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
                     break;
             }
         }
         return newStates;
+
+        /*
+        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, false, blockadesRemoved)) {
+            newStates.add(new State(relativeCoordX - 1, relativeCoordY, blockadesRemoved));
+        }
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, false, blockadesRemoved)) {
+            newStates.add(new State(relativeCoordX,  relativeCoordY - 1, blockadesRemoved));
+        }
+        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, false, blockadesRemoved)) {
+            newStates.add(new State(relativeCoordX + 1, relativeCoordY, blockadesRemoved));
+        }
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, false, blockadesRemoved)) {
+            newStates.add(new State(relativeCoordX, relativeCoordY + 1, blockadesRemoved));
+        }
+
+        if (hasKey) {
+            if (worldModel.getObjectAtCoordinate(relativeCoordX - 1, relativeCoordY) == '-') {
+                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX - 1, relativeCoordY)));
+            }
+            if (worldModel.getObjectAtCoordinate(relativeCoordX, relativeCoordY - 1) == '-') {
+                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY - 1)));
+            }
+            if (worldModel.getObjectAtCoordinate(relativeCoordX + 1, relativeCoordY) == '-') {
+                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX + 1, relativeCoordY)));
+            }
+            if (worldModel.getObjectAtCoordinate(relativeCoordX, relativeCoordY + 1) == '-') {
+                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY + 1)));
+            }
+        }
+        return newStates;*/
     }
 }

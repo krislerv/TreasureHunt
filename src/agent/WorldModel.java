@@ -12,8 +12,8 @@ public class WorldModel {
     private ArrayList<ArrayList<Character>> world;
     private int baseCoordX, baseCoordY;
 
-    public static final int WORLD_WIDTH = 40;
-    public static final int WORLD_HEIGHT = 40;
+    public static final int WORLD_WIDTH = 160;
+    public static final int WORLD_HEIGHT = 160;
 
     public WorldModel() {
         world = new ArrayList<>();
@@ -72,9 +72,8 @@ public class WorldModel {
     return view;
     }
 
-    public boolean agentBlocked(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, ArrayList<Character> allowedItemPickups, HashSet<Coordinate> blockadesRemoved) {
-        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '?', '$', 'k', 'd', 'a'));
-        blockades.removeAll(allowedItemPickups);
+    public boolean agentBlocked(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved) {
+        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '?'));
         switch (relativeAgentOrientation) {
             case 'N':
                 return blockades.contains(world.get(baseCoordY + relativeCoordY - 1).get(baseCoordX + relativeCoordX)) && !blockadesRemoved.contains(new Coordinate(relativeCoordX, relativeCoordY - 1));
@@ -88,12 +87,12 @@ public class WorldModel {
         return false;
     }
 
-    public boolean positionBlocked(int relativeCoordX, int relativeCoordY, boolean hasKey) {
-        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '?', '$', 'k', 'd', 'a'));
+    public boolean positionBlocked(int relativeCoordX, int relativeCoordY, boolean hasKey, HashSet<Coordinate> blockadesRemoved) {
+        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '?'));
         if (hasKey) {
             blockades.remove((Character)'-');
         }
-        return blockades.contains(world.get(baseCoordY + relativeCoordY).get(baseCoordX + relativeCoordX));
+        return blockades.contains(world.get(baseCoordY + relativeCoordY).get(baseCoordX + relativeCoordX)) && !blockadesRemoved.contains(new Coordinate(relativeCoordX, relativeCoordY));
     }
 
 
@@ -159,5 +158,9 @@ public class WorldModel {
                 return world.get(baseCoordY + relativeCoordY).get(baseCoordX + relativeCoordX + 1);
         }
         return 0;
+    }
+
+    public char getObjectAtCoordinate(int relativeCoordX, int relativeCoordY) {
+        return world.get(baseCoordY + relativeCoordY).get(baseCoordX + relativeCoordX);
     }
 }
