@@ -71,7 +71,7 @@ public class Explore {
      * @param goalState a goal state coordinate
      * @return a list of states, from the start state to the goal state
      */
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel) {
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, boolean safe) {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
 
@@ -105,7 +105,12 @@ public class Explore {
             }
             openSet.remove(currentState);
             closedSet.add(currentState);
-            ArrayList<State> neighborStates = currentState.generateAStarNeighbors(worldModel, currentState.getBlockadesRemoved());
+            ArrayList<State> neighborStates;
+            if (safe) {
+                neighborStates = currentState.generateAStarNeighbors(worldModel, currentState.getBlockadesRemoved());
+            } else {
+                neighborStates = currentState.generateUnsafeAStarNeighbors(worldModel, currentState.getBlockadesRemoved());
+            }
             for (State state : neighborStates) {
                 if (closedSet.contains(state)) {
                     continue;
@@ -138,7 +143,7 @@ public class Explore {
      * @param path the path the agent is supposed to move along
      * @return a list of characters indicating the moves the agent should make
      */
-    public static ArrayList<Character> generateActions(ArrayList<State> path) {//, char currentAgentOrientation, WorldModel worldModel) {
+    public static ArrayList<Character> generateActions(ArrayList<State> path, WorldModel worldModel) {//, char currentAgentOrientation, WorldModel worldModel) {
         ArrayList<Character> actions = new ArrayList<>();
         for (int i = 0; i < path.size() - 1; i++) {
             State fromState = path.get(i);
@@ -155,7 +160,14 @@ public class Explore {
                     actions.add('r');
                 }
             } else {
-                actions.add('u');
+                char objectInFront = worldModel.getObjectInFront(fromState.getRelativeCoordX(), fromState.getRelativeCoordY(), fromState.getRelativeAgentOrientation());
+                if (objectInFront == '-') {
+                    actions.add('u');
+                } else if (objectInFront == 'T') {
+                    actions.add('c');
+                } else if (objectInFront == '*') {
+                    actions.add('b');
+                }
             }
         }
         return actions;

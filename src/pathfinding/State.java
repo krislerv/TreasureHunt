@@ -3,6 +3,7 @@ package pathfinding;
 import agent.WorldModel;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 
 public class State implements Comparable<State> {
@@ -12,21 +13,35 @@ public class State implements Comparable<State> {
 
 	private int f, g, h;
 
-    private boolean hasGold, hasKey, hasAxe, hasRaft;
+    private boolean hasGold, hasKey, hasAxe, hasRaft, onRaft;
     private int dynamiteCount;
 	
 	private State parent;
 
 	private HashSet<Coordinate> blockadesRemoved;
 
-	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
+    private HashMap<Character, Integer> xOffset;
+    private HashMap<Character, Integer> yOffset;
+
+
+    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
 		this.relativeCoordX = relativeCoordX;
 		this.relativeCoordY = relativeCoordY;
 		this.relativeAgentOrientation = relativeAgentOrientation;
         blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
-	}
+        xOffset = new HashMap<>();
+        xOffset.put('N', 0);
+        xOffset.put('W', -1);
+        xOffset.put('S', 0);
+        xOffset.put('E', 1);
+        yOffset = new HashMap<>();
+        yOffset.put('N', -1);
+        yOffset.put('W', 0);
+        yOffset.put('S', 1);
+        yOffset.put('E', 0);
+    }
 
-	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, int dynamiteCount) {
+	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, boolean onRaft, int dynamiteCount) {
         this(relativeCoordX, relativeCoordY, relativeAgentOrientation);
         for (Coordinate c : blockadesRemoved) {
             this.blockadesRemoved.add(new Coordinate(c.x, c.y));
@@ -35,11 +50,12 @@ public class State implements Comparable<State> {
         this.hasKey = hasKey;
         this.hasAxe = hasAxe;
         this.hasRaft = hasRaft;
+        this.onRaft = onRaft;
         this.dynamiteCount = dynamiteCount;
     }
 
-    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, int dynamiteCount) {
-	    this(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount);
+    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, boolean onRaft, int dynamiteCount) {
+	    this(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount);
         this.blockadesRemoved.add(newDoorUnlock);
     }
 
@@ -95,7 +111,7 @@ public class State implements Comparable<State> {
 	    for (Coordinate c : blockadesRemoved) {
 	        blockadesRemovedSum += c.hashCode();
         }
-	    return 2399 * relativeCoordX + 2083 * relativeCoordY + 1889 * relativeAgentOrientation + blockadesRemovedSum;
+	    return 2399 * relativeCoordX + 2083 * relativeCoordY + 1889 * relativeAgentOrientation + blockadesRemovedSum + 1439 * (hasGold?1:0) + 1493 * (hasKey?1:0) + 1571 * (hasAxe?1:0) + 1627 * (hasRaft?1:0) + 1721 * dynamiteCount;
     }
 
     @Override
@@ -108,7 +124,7 @@ public class State implements Comparable<State> {
 	            return false;
             }
         }*/
-        return relativeCoordX == ((State)object).relativeCoordX &&  relativeCoordY == ((State)object).relativeCoordY &&  relativeAgentOrientation == ((State)object).relativeAgentOrientation;
+        return relativeCoordX == ((State)object).relativeCoordX && relativeCoordY == ((State)object).relativeCoordY && relativeAgentOrientation == ((State)object).relativeAgentOrientation && hasGold == ((State)object).hasGold && hasKey == ((State)object).hasKey && hasAxe == ((State)object).hasAxe && hasRaft == ((State)object).hasRaft && dynamiteCount == ((State)object).dynamiteCount;
     }
 
     public int getG() {
@@ -151,77 +167,169 @@ public class State implements Comparable<State> {
         switch (relativeAgentOrientation) {
             case 'N':
             case 'S':
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'W', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'E', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'W', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'E', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
                 break;
             case 'W':
             case 'E':
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'N', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'N', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+                break;
+        }
+        if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
+            newStates.add(new State(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation), relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+        }
+        if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-') {
+            newStates.add(new State(
+                    relativeCoordX,
+                    relativeCoordY,
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    hasRaft,
+                    onRaft,
+                    dynamiteCount));
+        }
+        return newStates;
+    }
+
+    public ArrayList<State> generateUnsafeAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved) {
+        ArrayList<State> newStates = new ArrayList<>();
+        switch (relativeAgentOrientation) {
+            case 'N':
+            case 'S':
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'W', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'E', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+                break;
+            case 'W':
+            case 'E':
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'N', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+                newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
                 break;
         }
         if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-') {
-            switch (relativeAgentOrientation) {
-                case 'N':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY - 1), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-                case 'W':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX - 1, relativeCoordY), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-                case 'S':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY + 1), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-                case 'E':
-                    newStates.add(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, new Coordinate(relativeCoordX + 1, relativeCoordY), hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-            }
+            newStates.add(new State(
+                    relativeCoordX,
+                    relativeCoordY,
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    hasRaft,
+                    onRaft,
+                    dynamiteCount));
         }
-        if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
-            switch (relativeAgentOrientation) {
-                case 'N':
-                    newStates.add(new State(relativeCoordX, relativeCoordY - 1, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-                case 'W':
-                    newStates.add(new State(relativeCoordX - 1, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-                case 'S':
-                    newStates.add(new State(relativeCoordX, relativeCoordY + 1, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-                case 'E':
-                    newStates.add(new State(relativeCoordX + 1, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount));
-                    break;
-            }
+        else if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T') {
+            newStates.add(new State(
+                    relativeCoordX,
+                    relativeCoordY,
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    true,
+                    onRaft,
+                    dynamiteCount));
+        }
+        else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*') {
+            newStates.add(new State(
+                    relativeCoordX,
+                    relativeCoordY,
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    hasRaft,
+                    onRaft,
+                    dynamiteCount - 1));
+        }
+        else if ((hasRaft || onRaft) && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '~') {
+            newStates.add(new State(
+                    relativeCoordX + xOffset.get(relativeAgentOrientation),
+                    relativeCoordY + yOffset.get(relativeAgentOrientation),
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    false,
+                    true,
+                    dynamiteCount));
+        }
+        else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '$') {
+            newStates.add(new State(
+                    relativeCoordX + xOffset.get(relativeAgentOrientation),
+                    relativeCoordY + yOffset.get(relativeAgentOrientation),
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    true,
+                    hasKey,
+                    hasAxe,
+                    hasRaft,
+                    false,
+                    dynamiteCount));
+        }
+        else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'k') {
+            newStates.add(new State(
+                    relativeCoordX + xOffset.get(relativeAgentOrientation),
+                    relativeCoordY + yOffset.get(relativeAgentOrientation),
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    hasGold,
+                    true,
+                    hasAxe,
+                    hasRaft,
+                    false,
+                    dynamiteCount));
+        }
+        else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'a') {
+            newStates.add(new State(
+                    relativeCoordX + xOffset.get(relativeAgentOrientation),
+                    relativeCoordY + yOffset.get(relativeAgentOrientation),
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    hasGold,
+                    hasKey,
+                    true,
+                    hasRaft,
+                    false,
+                    dynamiteCount));
+        }
+        else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'd') {
+            newStates.add(new State(
+                    relativeCoordX + xOffset.get(relativeAgentOrientation),
+                    relativeCoordY + yOffset.get(relativeAgentOrientation),
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    hasRaft,
+                    false,
+                    dynamiteCount + 1));
+        }
+        else if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
+            newStates.add(new State(
+                    relativeCoordX + xOffset.get(relativeAgentOrientation),
+                    relativeCoordY + yOffset.get(relativeAgentOrientation),
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    hasRaft,
+                    false,
+                    dynamiteCount));
         }
         return newStates;
-
-        /*
-        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, false, blockadesRemoved)) {
-            newStates.add(new State(relativeCoordX - 1, relativeCoordY, blockadesRemoved));
-        }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, false, blockadesRemoved)) {
-            newStates.add(new State(relativeCoordX,  relativeCoordY - 1, blockadesRemoved));
-        }
-        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, false, blockadesRemoved)) {
-            newStates.add(new State(relativeCoordX + 1, relativeCoordY, blockadesRemoved));
-        }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, false, blockadesRemoved)) {
-            newStates.add(new State(relativeCoordX, relativeCoordY + 1, blockadesRemoved));
-        }
-
-        if (hasKey) {
-            if (worldModel.getObjectAtCoordinate(relativeCoordX - 1, relativeCoordY) == '-') {
-                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX - 1, relativeCoordY)));
-            }
-            if (worldModel.getObjectAtCoordinate(relativeCoordX, relativeCoordY - 1) == '-') {
-                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY - 1)));
-            }
-            if (worldModel.getObjectAtCoordinate(relativeCoordX + 1, relativeCoordY) == '-') {
-                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX + 1, relativeCoordY)));
-            }
-            if (worldModel.getObjectAtCoordinate(relativeCoordX, relativeCoordY + 1) == '-') {
-                newStates.add(new State(relativeCoordX, relativeCoordY, blockadesRemoved, new Coordinate(relativeCoordX, relativeCoordY + 1)));
-            }
-        }
-        return newStates;*/
     }
 }

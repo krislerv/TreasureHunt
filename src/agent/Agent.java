@@ -15,7 +15,7 @@ public class Agent {
     private int relativeCoordX, relativeCoordY;
     private char relativeAgentOrientation;
 
-    private boolean hasGold, hasKey, hasAxe, hasRaft;
+    private boolean hasGold, hasKey, hasAxe, hasRaft, onRaft;
     private int dynamiteCount;
 
     private ArrayList<Character> moveBuffer;
@@ -44,7 +44,7 @@ public class Agent {
     private boolean explore() {
         System.out.println("EXPLORE");
         State unexploredTile = Explore.findUnexploredTile2(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount),
+                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 worldModel,
                 relativeCoordX,
                 relativeCoordY);
@@ -55,13 +55,14 @@ public class Agent {
         }
 
         ArrayList<State> path = Explore.findPath(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount),
+                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 new Coordinate(unexploredTile.getRelativeCoordX(), unexploredTile.getRelativeCoordY()),
-                worldModel);
+                worldModel,
+                true);
 
         System.out.println(path);
 
-        ArrayList<Character> actions = Explore.generateActions(path);
+        ArrayList<Character> actions = Explore.generateActions(path, worldModel);
         //System.out.println(actions);
         moveBuffer = actions;
         if (moveBuffer.isEmpty()) {
@@ -84,11 +85,12 @@ public class Agent {
                     if (coordinate.x == relativeCoordX && coordinate.y == relativeCoordY) {
                         continue;   // the world model doesn't get updated until the agent actually moves, so when the agent picks up an item, the world model thinks the item is still there
                     }               // this makes sure the agent actually moves after picking up an item to allow the world model to update
-                    ArrayList<State> path = Explore.findPath(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount),
+                    ArrayList<State> path = Explore.findPath(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                             coordinate,
-                            worldModel);
+                            worldModel,
+                            true);
                     if (path.size() != 0) {     // if the returned path is not empty, a path was found
-                        moveBuffer = Explore.generateActions(path);
+                        moveBuffer = Explore.generateActions(path, worldModel);
                         System.out.println("MOVEBUFFER " + moveBuffer);
                         System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
                         System.out.println(objectType + " " + coordinate + " " + path);
@@ -107,6 +109,24 @@ public class Agent {
     }
 
     private boolean unsafeExplore() {
+        ArrayList<Coordinate> goldStates = worldModel.getObjectsTiles('$');
+        if (goldStates.size() == 0) {
+            return false;
+        }
+        for (Coordinate coordinate : goldStates) {
+            ArrayList<State> path = Explore.findPath(
+                    new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
+                    coordinate,
+                    worldModel,
+                    false);
+            if (path.size() != 0) {     // if the returned path is not empty, a path was found
+                moveBuffer = Explore.generateActions(path, worldModel);
+                System.out.println("MOVEBUFFER " + moveBuffer);
+                System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
+                System.out.println("$$$" + " " + coordinate + " " + path);
+                return true;
+            }
+        }
         return false;
     }
 
@@ -117,13 +137,14 @@ public class Agent {
     private boolean home() {
         System.out.println("HOME");
         ArrayList<State> path = Explore.findPath(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, dynamiteCount),
+                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 new Coordinate(0, 0),
-                worldModel);
+                worldModel,
+                false);
 
         System.out.println(path);
 
-        ArrayList<Character> actions = Explore.generateActions(path);
+        ArrayList<Character> actions = Explore.generateActions(path, worldModel);
         System.out.println(actions);
         moveBuffer = actions;
         if (moveBuffer.isEmpty()) {
@@ -151,6 +172,11 @@ public class Agent {
         }
         if (moveBuffer.isEmpty()) {
             explore();
+        }
+        if (moveBuffer.isEmpty()) {
+            if(unsafeExplore()) {
+                priority = -1;
+            }
         }
         if (moveBuffer.isEmpty()) {
             System.exit(1);

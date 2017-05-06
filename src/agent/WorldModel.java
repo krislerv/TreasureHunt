@@ -56,15 +56,7 @@ public class WorldModel {
             char newView[][] = new char[5][5];
             for (int i = 0; i < 5; i++) {
                 for (int j = 0; j < 5; j++) {
-                    //if (relativeAgentOrientation == 'W') {
-                        //newView[i][j] = view[j][4 - i];
-                    //}
-                /*if (relativeAgentOrientation == 'S') {
-                    newView[i][j] = view[5 - ]
-                }*/
-                //if (relativeAgentOrientation == 'E') {
                     newView[i][j] = view[5 - j - 1][i];
-                //}
                 }
             }
             view = newView;
