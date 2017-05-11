@@ -109,7 +109,7 @@ public class Agent {
         for (Coordinate coordinate : goldStates) {
             int dynamiteAvailable = worldModel.getAvailableDynamite();  // finds the number of known dynamites in the world
             ArrayList<State> path = null;
-            for (int i = -dynamiteAvailable; i <= -dynamiteAvailable + dynamiteCount; i++) {    // tries to find a path to the gold using as few dynamite as possible
+            for (int i = -dynamiteAvailable; i <= dynamiteCount; i++) {    // tries to find a path to the gold using as few dynamite as possible
                 path = Explore.findPath(                                                        // starts with -dynamiteAvailable, meaning you have to pick up dynamites before going to the gold
                         new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, i),
                         coordinate,

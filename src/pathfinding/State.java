@@ -248,7 +248,7 @@ public class State implements Comparable<State> {
                         dynamiteCount));
             }
         } else {
-            if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-') {
+            if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
@@ -276,7 +276,7 @@ public class State implements Comparable<State> {
                         onRaft,
                         dynamiteCount));
             }
-            else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*') {
+            else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*' && !onRaft) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
@@ -342,12 +342,14 @@ public class State implements Comparable<State> {
                         false,
                         dynamiteCount));
             }
-            else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'd') {
+            else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'd' &&
+                    !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
                         relativeAgentOrientation,
                         blockadesRemoved,
+                        new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
                         hasGold,
                         hasKey,
                         hasAxe,
