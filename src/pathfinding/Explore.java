@@ -1,5 +1,6 @@
 package pathfinding;
 
+import agent.Agent;
 import agent.WorldModel;
 
 import java.util.*;
@@ -11,7 +12,7 @@ public class Explore {
      * @param currentState The current state of the agent
      * @return A state in an unexplored tile
      */
-    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean hasKey) {
+    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean waterMode) {
         System.out.println("DFS");
         HashSet<State> discovered = new HashSet<>();
         Stack<State> stack = new Stack<>();
@@ -25,7 +26,7 @@ public class Explore {
                 System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
                 return currentState;
             }
-            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel);
+            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel, waterMode);
             for (State state : neighborStates) {
                 if (!discovered.contains(state)) {
                     discovered.add(state);
@@ -39,8 +40,7 @@ public class Explore {
         return null;
     }
 
-    public static State findUnexploredTile2(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY) {
-        System.out.println("BFS");
+    public static State findUnexploredTile2(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean waterMode) {
         HashSet<State> discovered = new HashSet<>();
         ArrayList<State> queue = new ArrayList<>();
 
@@ -53,7 +53,7 @@ public class Explore {
                 System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
                 return currentState;
             }
-            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel);
+            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel, waterMode);
             for (State state : neighborStates) {
                 if (!discovered.contains(state)) {
                     discovered.add(state);
@@ -71,19 +71,19 @@ public class Explore {
      * @param goalState a goal state coordinate
      * @return a list of states, from the start state to the goal state
      */
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, boolean safe) {
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, boolean safeMode, boolean waterMode) {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
 
         openSet.add(startState);
 
-        startState.setH(startState.heuristic(goalState));
+        startState.setH(startState.heuristic(goalState, worldModel));
 
         startState.updateG(0);
 
         while (!openSet.isEmpty()) {
             State bestState = null;
-            int bestStateF = 999;
+            int bestStateF = Integer.MAX_VALUE;
             for (State state : openSet) {
                 if (state.getF() < bestStateF) {
                     bestState = state;
@@ -91,8 +91,7 @@ public class Explore {
                 }
             }
             State currentState = bestState;
-            if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y) {
-                //System.out.println("GOAL " + currentState);
+            if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y && currentState.getDynamiteCount() >= 0) {
                 ArrayList<State> path = new ArrayList<>();
                 path.add(currentState);
                 while (currentState.getParent() != null) {
@@ -100,16 +99,15 @@ public class Explore {
                     currentState = currentState.getParent();
                 }
                 Collections.reverse(path);
-                //System.out.println(path);
                 return path;
             }
             openSet.remove(currentState);
             closedSet.add(currentState);
             ArrayList<State> neighborStates;
-            if (safe) {
+            if (safeMode) {
                 neighborStates = currentState.generateAStarNeighbors(worldModel, currentState.getBlockadesRemoved());
             } else {
-                neighborStates = currentState.generateUnsafeAStarNeighbors(worldModel, currentState.getBlockadesRemoved());
+                neighborStates = currentState.generatePlannedAStarNeighbors(worldModel, currentState.getBlockadesRemoved(), waterMode);
             }
             for (State state : neighborStates) {
                 if (closedSet.contains(state)) {
@@ -117,10 +115,11 @@ public class Explore {
                 }
                 int tentativeGScore = currentState.getG() + 1;
                 if (!openSet.contains(state)) {
+                    state.setH(state.heuristic(goalState, worldModel));
                     openSet.add(state);
                 } else {
                     for (State ss : openSet) {  // if we generate a duplicate state, make sure we use the old one
-                        if (ss.getRelativeCoordX() == state.getRelativeCoordX() && ss.getRelativeCoordY() == state.getRelativeCoordY()) {
+                        if (ss.equals(state)) {
                             state = ss;
                             break;
                         }
@@ -133,8 +132,53 @@ public class Explore {
                 state.updateG(tentativeGScore);
             }
         }
-        //System.out.println("We ain't found shit");
         return new ArrayList<>();
+    }
+
+    public static int leastDynamitePath(DijkstraCoordinate startState, DijkstraCoordinate goalState, WorldModel worldModel) {
+
+        ArrayList<DijkstraCoordinate> coordinates = worldModel.getExploredTiles();
+
+        for (DijkstraCoordinate coordinate : coordinates) {
+            coordinate.setDistance(Integer.MAX_VALUE);
+        }
+
+        startState.setDistance(0);
+        coordinates.add(startState);
+
+        while (!coordinates.isEmpty()) {
+            DijkstraCoordinate bestCoordinate = null;
+            int bestCoordinateValue = Integer.MAX_VALUE;
+            for (DijkstraCoordinate coordinate : coordinates) {
+                if (coordinate.getDistance() < bestCoordinateValue) {
+                    bestCoordinate = coordinate;
+                    bestCoordinateValue = coordinate.getDistance();
+                }
+            }
+            if (bestCoordinate.x == goalState.x && bestCoordinate.y == goalState.y) {
+                return (int) Math.floor(bestCoordinate.getDistance() / 1000);
+            }
+            coordinates.remove(bestCoordinate);
+            for (DijkstraCoordinate coordinate : coordinates) {
+                if (isNeighbor(bestCoordinate, coordinate)) {
+                    int alt;
+                    if (worldModel.getObjectAtCoordinate(coordinate.x, coordinate.y) == '*') {
+                        alt = bestCoordinate.getDistance() + 1000;
+                    } else {
+                        alt = bestCoordinate.getDistance() + 1;
+                    }
+                    if (alt < coordinate.getDistance()) {
+                        coordinate.setDistance(alt);
+                        coordinate.setParent(bestCoordinate);
+                    }
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static boolean isNeighbor(DijkstraCoordinate c1, DijkstraCoordinate c2) {
+        return (Math.abs(c1.x - c2.x) == 0 && Math.abs(c1.y - c2.y) == 1) || (Math.abs(c1.x - c2.x) == 1 && Math.abs(c1.y - c2.y) == 0);
     }
 
 
@@ -171,76 +215,6 @@ public class Explore {
             }
         }
         return actions;
-        /*System.out.println(path);
-        ArrayList<Character> directions = new ArrayList<>(Arrays.asList('N', 'W', 'S', 'E'));
-        HashMap<Character, Integer> xOffset = new HashMap<>();
-        xOffset.put('N', 0);
-        xOffset.put('W', -1);
-        xOffset.put('S', 0);
-        xOffset.put('E', 1);
-        HashMap<Character, Integer> yOffset = new HashMap<>();
-        yOffset.put('N', -1);
-        yOffset.put('W', 0);
-        yOffset.put('S', 1);
-        yOffset.put('E', 0);
-        ArrayList<Character> actions = new ArrayList<>();
-        for (int i = 0; i < path.size() - 1; i++) {
-            State fromState = path.get(i);
-            State toState = path.get(i + 1);
-
-            int xDiff = toState.getRelativeCoordX() - fromState.getRelativeCoordX();
-            int yDiff = toState.getRelativeCoordY() - fromState.getRelativeCoordY();
-
-            char newDirection = 0;
-
-            if (xDiff == -1) {
-                newDirection = 'W';
-            } else if (xDiff == 1) {
-                newDirection = 'E';
-            } else if (yDiff == -1) {
-                newDirection = 'N';
-            } else if (yDiff == 1) {
-                newDirection = 'S';
-            }
-            if (xDiff == 0 && yDiff == 0) {
-                char objectInFront = worldModel.getObjectAtCoordinate(fromState.getRelativeCoordX() + xOffset.get(currentAgentOrientation), fromState.getRelativeCoordY() + yOffset.get(currentAgentOrientation));
-                if (objectInFront == '-') {
-                    actions.add('u');
-                } else if (objectInFront == 'T') {
-                    actions.add('c');
-                } else if (objectInFront == '*') {
-                    actions.add('b');
-                }
-            } else {
-                int directionDifference = directions.indexOf(newDirection) - directions.indexOf(currentAgentOrientation);
-
-                if (directionDifference == 0) {
-                    actions.add('f');
-                } else if (directionDifference == 1) {
-                    actions.add('l');
-                    actions.add('f');
-                } else if (directionDifference == 2) {
-                    actions.add('l');
-                    actions.add('l');
-                    actions.add('f');
-                } else if (directionDifference == 3) {
-                    actions.add('r');
-                    actions.add('f');
-                } else if (directionDifference == -1) {
-                    actions.add('r');
-                    actions.add('f');
-                } else if (directionDifference == -2) {
-                    actions.add('r');
-                    actions.add('r');
-                    actions.add('f');
-                } else if (directionDifference == -3) {
-                    actions.add('l');
-                    actions.add('f');
-                }
-                currentAgentOrientation = newDirection;
-            }
-        }
-        return actions;*/
     }
 
 }

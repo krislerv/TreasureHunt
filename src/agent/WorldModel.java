@@ -1,6 +1,7 @@
 package agent;
 
 import pathfinding.Coordinate;
+import pathfinding.DijkstraCoordinate;
 import pathfinding.State;
 
 import java.util.ArrayList;
@@ -12,8 +13,10 @@ public class WorldModel {
     private ArrayList<ArrayList<Character>> world;
     private int baseCoordX, baseCoordY;
 
-    public static final int WORLD_WIDTH = 160;
-    public static final int WORLD_HEIGHT = 160;
+    public static final int WORLD_WIDTH = 164;
+    public static final int WORLD_HEIGHT = 164;
+
+    private int minExploredX = WORLD_WIDTH, minExploredY = WORLD_HEIGHT, maxExploredX = 0, maxExploredY = 0;
 
     public WorldModel() {
         world = new ArrayList<>();
@@ -35,6 +38,16 @@ public class WorldModel {
                     continue;   // ignore agent position
                 }
                 world.get(baseCoordY + relativeCoordY + i - 2).set(baseCoordX + relativeCoordX + j - 2, view[i][j]);
+                if (baseCoordY + relativeCoordY + i - 2 < minExploredY) {
+                    minExploredY = baseCoordY + relativeCoordY + i - 2;
+                } else if (baseCoordY + relativeCoordY + i - 2 > maxExploredY) {
+                    maxExploredY = baseCoordY + relativeCoordY + i - 2;
+                }
+                if (baseCoordX + relativeCoordX + j - 2 < minExploredX) {
+                    minExploredX = baseCoordX + relativeCoordX + j - 2;
+                } else if (baseCoordX + relativeCoordX + j - 2 > maxExploredX) {
+                    maxExploredX = baseCoordX + relativeCoordX + j - 2;
+                }
             }
         }
         printWorld(relativeCoordX, relativeCoordY, relativeAgentOrientation);
@@ -65,7 +78,7 @@ public class WorldModel {
     }
 
     public boolean agentBlocked(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved) {
-        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '?'));
+        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '.', '*', 'T', '-', '?'));
         switch (relativeAgentOrientation) {
             case 'N':
                 return blockades.contains(world.get(baseCoordY + relativeCoordY - 1).get(baseCoordX + relativeCoordX)) && !blockadesRemoved.contains(new Coordinate(relativeCoordX, relativeCoordY - 1));
@@ -79,18 +92,35 @@ public class WorldModel {
         return false;
     }
 
-    public boolean positionBlocked(int relativeCoordX, int relativeCoordY, boolean hasKey, HashSet<Coordinate> blockadesRemoved) {
-        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '*', 'T', '-', '?'));
+    public boolean positionBlocked(int relativeCoordX, int relativeCoordY, boolean hasKey, HashSet<Coordinate> blockadesRemoved, boolean waterMode) {
+        ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '.', '*', 'T', '-', '?'));
         if (hasKey) {
             blockades.remove((Character)'-');
+        }
+        if (waterMode) {
+            blockades = new ArrayList<>(Arrays.asList(' ', '.', '*', 'T', '-', '?', '$', 'k', 'a', 'd'));
         }
         return blockades.contains(world.get(baseCoordY + relativeCoordY).get(baseCoordX + relativeCoordX)) && !blockadesRemoved.contains(new Coordinate(relativeCoordX, relativeCoordY));
     }
 
 
     public void printWorld(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
-        for (int i = 0; i < WORLD_HEIGHT; i++) {
-            for (int j = 0; j < WORLD_WIDTH; j++) {
+        boolean printAll = false;
+        int minX = minExploredX;
+        int minY = minExploredY;
+        int maxX = maxExploredX;
+        int maxY = maxExploredY;
+        if (printAll) {
+            minX = 0;
+            minY = 0;
+            maxX = WORLD_WIDTH;
+            maxY = WORLD_HEIGHT;
+        } else {
+            maxX++;
+            maxY++;
+        }
+        for (int i = minY; i < maxY; i++) {
+            for (int j = minX; j < maxX; j++) {
                 if (baseCoordY + relativeCoordY == i && baseCoordX + relativeCoordX == j) {
                     switch (relativeAgentOrientation) {
                         case 'N':
@@ -154,5 +184,43 @@ public class WorldModel {
 
     public char getObjectAtCoordinate(int relativeCoordX, int relativeCoordY) {
         return world.get(baseCoordY + relativeCoordY).get(baseCoordX + relativeCoordX);
+    }
+
+    public ArrayList<DijkstraCoordinate> getExploredTiles() {
+        ArrayList<DijkstraCoordinate> coordinates = new ArrayList<>();
+        for (int i = -WORLD_HEIGHT/2; i < WORLD_HEIGHT/2; i++) {
+            for (int j = -WORLD_WIDTH/2; j < WORLD_WIDTH/2; j++) {
+                if (getObjectAtCoordinate(j, i) != '?') {
+                    coordinates.add(new DijkstraCoordinate(j, i));
+                }
+            }
+        }
+        return coordinates;
+    }
+
+    public int getAvailableDynamite() {
+        int availableDynamite = 0;
+        for (int i = minExploredY - WORLD_HEIGHT/2; i < maxExploredY - WORLD_HEIGHT/2 + 1; i++) {
+            for (int j = minExploredX - WORLD_WIDTH/2; j < maxExploredX - WORLD_WIDTH/2 + 1; j++) {
+                if (getObjectAtCoordinate(j, i) == 'd') {
+                    availableDynamite++;
+                }
+            }
+        }
+        return availableDynamite;
+    }
+
+    public int getMinDynamiteDistance(int relativeCoordX, int relativeCoordY) {
+        int minDynamiteDistance = 999;
+        for (int i = minExploredY - WORLD_HEIGHT/2; i < maxExploredY - WORLD_HEIGHT/2 + 1; i++) {
+            for (int j = minExploredX - WORLD_WIDTH/2; j < maxExploredX - WORLD_WIDTH/2 + 1; j++) {
+                if (getObjectAtCoordinate(j, i) == 'd') {
+                    if (Math.abs(relativeCoordX - j) + Math.abs(relativeCoordY - i) < minDynamiteDistance) {
+                        minDynamiteDistance = Math.abs(relativeCoordX - j) + Math.abs(relativeCoordY - i);
+                    }
+                }
+            }
+        }
+        return minDynamiteDistance;
     }
 }
