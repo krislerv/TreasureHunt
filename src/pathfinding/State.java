@@ -261,8 +261,8 @@ public class State implements Comparable<State> {
                         hasRaft,
                         onRaft,
                         dynamiteCount));
-            }
-            else if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T') {
+            }                                                                                                               // uncommenting this fucks board 4 for some reason
+            else if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T' /*&& !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))*/) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
@@ -276,7 +276,7 @@ public class State implements Comparable<State> {
                         onRaft,
                         dynamiteCount));
             }
-            else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*' && !onRaft) {
+            else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation))) && !onRaft) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,

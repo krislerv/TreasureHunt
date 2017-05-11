@@ -28,7 +28,7 @@ public class Agent {
     private HashSet<Coordinate> blockadesRemoved;
 
     public enum Stage {
-        EXPLORE, PLANNED, UNSAFE
+        EXPLORE, PLANNED, UNSAFE, BOMBERMAN
     }
 
     private int priority;
@@ -167,6 +167,10 @@ public class Agent {
         return false;
     }
 
+    /*private boolean bomberman() {
+
+    }*/
+
     private boolean goHome() {
         ArrayList<State> path = Explore.findPath(
                 new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
@@ -239,6 +243,18 @@ public class Agent {
                 }
             }
         }
+        /*if (moveBuffer.isEmpty()) {
+            priority = 9;
+            currentStage = Stage.BOMBERMAN;
+        }
+
+        if (currentStage == Stage.BOMBERMAN) {
+            if (moveBuffer.isEmpty()) {
+                System.out.println("BOMBERMAN");
+                bomberman();
+            }
+        }*/
+
 
         if (moveBuffer.isEmpty()) {
             priority = 9;
