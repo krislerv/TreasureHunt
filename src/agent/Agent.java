@@ -14,56 +14,98 @@ import java.util.HashSet;
 
 public class Agent {
 
+    /**
+     * The world model of the agent. Keeps track of the world.
+     */
     private WorldModel worldModel;
+
+    /**
+     * The relative coordinates of the agent.
+     */
     private int relativeCoordX, relativeCoordY;
+
+    /**
+     * The relative orientation of the agent.
+     */
     private char relativeAgentOrientation;
 
+    /**
+     * Agent inventory.
+     */
     private boolean hasGold, hasKey, hasAxe, hasRaft, onRaft;
     private int dynamiteCount;
 
+    /**
+     * If the agent gets to the end of the move generation cycle with an empty move buffer, then this variable is set to true.
+     * If the same thing happens on the next iteration, the agent will switch to the lumberjack stage.
+     */
     private boolean noop;
 
+    /**
+     * A list containing all the moves the agent currently has planned.
+     */
     private ArrayList<Character> moveBuffer;
 
+    /**
+     * Keeps track of which stage the agent is currently in.
+     */
     private Stage currentStage;
 
-    private HashSet<Coordinate> blockadesRemoved;
-
+    /**
+     * Denotes what the agent should do.
+     * In the SAFE stage, the agent will
+     *      1) try to go home if it has the gold
+     *      2) try to collect items without using any resources
+     *      3) explore without using any resources
+     * In the PLANNED stage, the agent will try to plan a path from its current position to the gold to home.
+     * In the WATER stage, the agent will try to get a raft and explore the water.
+     * In the LUMBERJACK stage, the agent will try to explore the map using as much wood as necessary.
+     */
     public enum Stage {
-        EXPLORE, PLANNED, UNSAFE, LUMBERJACK
+        SAFE, PLANNED, WATER, LUMBERJACK
     }
 
+    /**
+     * In the SAFE stage, the different actions can override each other (no point in going for the axe if you can get home with the gold).
+     * This variable keeps track of which of the three actions is currently being done.
+     */
     private int priority;
 
+    /**
+     * Constructor for the agent. Initializes values.
+     */
     public Agent() {
         worldModel = new WorldModel();
         relativeCoordX = 0;
         relativeCoordY = 0;
-        relativeAgentOrientation = 'W'; // we don't know which way we're facing (and it doesn't matter), so just call the initial direction south
+        relativeAgentOrientation = 'W'; // we don't know which way we're facing (and it doesn't matter), so just arbitrarily choose the initial direction
         moveBuffer = new ArrayList<>();
-        currentStage = Stage.EXPLORE;
-        blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
+        currentStage = Stage.SAFE;
     }
 
-    private boolean explore(boolean safeMode, boolean waterMode, boolean lumberjackMode) {
+    /**
+     * Tries to uncover unexplored tiles. Does this by first finding an unexplored tile, then uses A* to find a path there from the current position.
+     *
+     * @param stage which stage the agent is currently in
+     * @return true if a path was found, false otherwise
+     */
+    private boolean explore(Stage stage) {
         State unexploredTile = Explore.findUnexploredTile(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
+                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 worldModel,
                 relativeCoordX,
                 relativeCoordY,
-                waterMode,
-                lumberjackMode);
+                stage);
 
         if (unexploredTile == null) {
             return false;
         }
 
         ArrayList<State> path = Explore.findPath(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, waterMode || (lumberjackMode && onRaft), dynamiteCount),
+                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, stage == Stage.WATER || (stage == Stage.LUMBERJACK && onRaft), dynamiteCount),
                 new Coordinate(unexploredTile.getRelativeCoordX(), unexploredTile.getRelativeCoordY()),
                 worldModel,
-                safeMode,
-                waterMode);
+                stage);
 
         System.out.println(path);
 
@@ -72,9 +114,9 @@ public class Agent {
     }
 
     /**
-     * Tries to safely collect items.
+     * Tries to safely collect items. Does this by first finding all the items, then uses A* to find a path there from the current position.
      *
-     * @return if an item is found, returns the path to the item. Otherwise returns an empty list.
+     * @return true if a path was found, false otherwise
      */
     private boolean collect() {
         ArrayList<Character> objects = new ArrayList<>(Arrays.asList('$', 'k', 'd', 'a'));  // the priority order for objects
@@ -89,11 +131,10 @@ public class Agent {
                         continue;   // the world model doesn't get updated until the agent actually moves, so when the agent picks up an item, the world model thinks the item is still there
                     }               // this makes sure the agent actually moves after picking up an item to allow the world model to update
                     ArrayList<State> path = Explore.findPath(
-                            new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
+                            new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                             coordinate,
                             worldModel,
-                            true,
-                            false);
+                            Stage.SAFE);
                     if (path.size() != 0) {     // if the returned path is not empty, a path was found
                         moveBuffer = Explore.generateActions(path, worldModel);
                         System.out.println("MOVE BUFFER " + moveBuffer);
@@ -107,6 +148,14 @@ public class Agent {
         return false;
     }
 
+    /**
+     * Tries to find a path from the current position to the gold to home. Does this by first finding a path to the gold while being as
+     * dynamite efficient as possible. First it checks the number of known dynamite in the world. Then it loops from minus that amount
+     * to the number of dynamite the agent currently has. For example: The agent has 2 dynamite and there are 3 more in the world.
+     * The method will loop from -3 to 2 (inclusive) and try to find a path with that many dynamite (trying to find a path with -3
+     * dynamites means that the agent has to pick up 3 dynamite before being in a valid goal state).
+     * After this, the method uses the goal state of the previous search as the start state for the search for a path home.
+     */
     private void solutionExplore() {
         ArrayList<Coordinate> goldStates = worldModel.getObjectsTiles('$');
         if (goldStates.size() == 0) {
@@ -117,11 +166,10 @@ public class Agent {
             ArrayList<State> path = null;
             for (int i = -dynamiteAvailable; i <= dynamiteCount; i++) {    // tries to find a path to the gold using as few dynamite as possible
                 path = Explore.findPath(                                                        // starts with -dynamiteAvailable, meaning you have to pick up dynamites before going to the gold
-                        new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, i),
+                        new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, i),
                         coordinate,
                         worldModel,
-                        false,
-                        false);
+                        Stage.PLANNED);
                 if (path.size() != 0) {
                     dynamiteAvailable = dynamiteCount - i;      // however many dynamite are left is how many we will have to get from the gold to the start position
                     break;
@@ -134,8 +182,7 @@ public class Agent {
                         startState,
                         new Coordinate(0, 0),
                         worldModel,
-                        false,
-                        false);
+                        Stage.PLANNED);
                 if (path2.size() != 0) {
                     moveBuffer = Explore.generateActions(path2, worldModel);
                     System.out.println("MOVE BUFFER " + moveBuffer);
@@ -147,6 +194,11 @@ public class Agent {
         }
     }
 
+    /**
+     * Tries to get a raft by finding a tree and cutting it.
+     *
+     * @return true if a path was found, false otherwise
+     */
     private boolean getRaft() {
         ArrayList<Coordinate> treeStates = worldModel.getObjectsTilesSortedByDistance('T', new State(relativeCoordX, relativeCoordY, relativeAgentOrientation));
         if (treeStates.size() == 0) {
@@ -154,11 +206,10 @@ public class Agent {
         }
         for (Coordinate coordinate : treeStates) {
             ArrayList<State> path = Explore.findPath(
-                    new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, false, false, -Integer.MAX_VALUE),
+                    new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, false, false, -Integer.MAX_VALUE),
                     coordinate,
                     worldModel,
-                    false,
-                    false);
+                    Stage.PLANNED);
             if (path.size() != 0) {     // if the returned path is not empty, a path was found
                 moveBuffer = Explore.generateActions(path, worldModel);
                 System.out.println("MOVE BUFFER " + moveBuffer);
@@ -170,6 +221,9 @@ public class Agent {
         return false;
     }
 
+    /**
+     * Tries to find a path to the water.
+     */
     private void goToWater() {
         ArrayList<State> path = Explore.findClosestTileOfType('~', new State(relativeCoordX, relativeCoordY, relativeAgentOrientation), worldModel);
         if (path.size() != 0) {     // if the returned path is not empty, a path was found
@@ -180,13 +234,16 @@ public class Agent {
         }
     }
 
+    /**
+     * Tries to find a path home.
+     * @return true if a path was found, false otherwise
+     */
     private boolean goHome() {
         ArrayList<State> path = Explore.findPath(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
+                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 new Coordinate(0, 0),
                 worldModel,
-                false,
-                false);
+                Stage.PLANNED);
 
         System.out.println(path);
 
@@ -196,10 +253,39 @@ public class Agent {
         return !moveBuffer.isEmpty();
     }
 
+    /**
+     * Updates the move buffer if necessary, then performs an action and updates the agent's state depending on the action.
+     *
+     * How the agent chooses what to do next:
+     * Start in SAFE stage.
+     * If I have the gold and I can get home: Go home.
+     * If I can safely collect an item: Collect the item.
+     * If I can find somewhere to safely explore: Explore.
+     *
+     * If the move buffer is empty, go to the PLANNED stage.
+     *
+     * If I can find a path from my current position to the gold to home: Do that.
+     *
+     * If the move buffer is empty, go to the WATER stage.
+     *
+     * If I can get a raft: Get the raft.
+     * If I have a raft and can get to water: Go to the water.
+     * If I am on the water: Explore, don't leave the water.
+     *
+     * If the move buffer is empty and noop is false, set noop to true and to to the SAFE stage.
+     * If the move buffer is empty and noop is true, to to the LUMBERJACK stage.
+     *
+     * If I can find somewhere to explore by cutting down trees and using rafts: Explore.
+     *
+     * If the move buffer is empty, go to the SAFE stage.
+     *
+     * @param view what the agent perceived after the last action
+     * @return the next action the agent is to perform
+     */
     public char get_action( char view[][] ) {
         worldModel.updateWorldModel(view, relativeCoordX, relativeCoordY, relativeAgentOrientation);
 
-        if (currentStage == Stage.EXPLORE) {
+        if (currentStage == Stage.SAFE) {
             if (moveBuffer.isEmpty() || priority > 0) {
                 if (hasGold) {
                     System.out.println("GO HOME");
@@ -216,7 +302,7 @@ public class Agent {
             }
             if (moveBuffer.isEmpty()) {
                 System.out.println("EXPLORE");
-                if (explore(true, false, false)) {
+                if (explore(Stage.SAFE)) {
                     priority = 2;
                 }
             }
@@ -232,17 +318,15 @@ public class Agent {
                 solutionExplore();
             }
             if (moveBuffer.isEmpty())  {
-                priority = 9;
-                currentStage = Stage.UNSAFE;
+                currentStage = Stage.WATER;
             }
         }
 
-        if (currentStage == Stage.UNSAFE) {
+        if (currentStage == Stage.WATER) {
             if (moveBuffer.isEmpty() && !hasRaft && !onRaft) {
                 System.out.println("GET RAFT");
                 if (getRaft()) {    // if we cut down a tree to get a raft, try to explore new areas before using the raft
-                    currentStage = Stage.EXPLORE;
-                    priority = 9;
+                    currentStage = Stage.SAFE;
                 }
             }
             if (moveBuffer.isEmpty() && hasRaft && !onRaft) {
@@ -251,11 +335,10 @@ public class Agent {
             }
             if (moveBuffer.isEmpty() && onRaft) {
                 System.out.println("WATER EXPLORE");
-                explore(false, true, false);
+                explore(Stage.WATER);
             }
             if (moveBuffer.isEmpty()) {
-                priority = 9;
-                currentStage = Stage.EXPLORE;
+                currentStage = Stage.SAFE;
             }
         }
 
@@ -267,11 +350,10 @@ public class Agent {
         if (currentStage == Stage.LUMBERJACK) {
             if (moveBuffer.isEmpty()) {
                 System.out.println("LUMBERJACK EXPLORE");
-                explore(false, false, true);
+                explore(Stage.LUMBERJACK);
             }
             if (moveBuffer.isEmpty())  {
-                priority = 9;
-                currentStage = Stage.EXPLORE;
+                currentStage = Stage.SAFE;
             }
         }
 
@@ -311,20 +393,8 @@ public class Agent {
                 if (objectInFront != '~' && objectInFront != '.') {
                     onRaft = false;
                 }
-                switch (relativeAgentOrientation) {
-                    case 'N':
-                        relativeCoordY--;
-                        break;
-                    case 'W':
-                        relativeCoordX--;
-                        break;
-                    case 'S':
-                        relativeCoordY++;
-                        break;
-                    case 'E':
-                        relativeCoordX++;
-                        break;
-                }
+                relativeCoordX += State.xOffset.get(relativeAgentOrientation);
+                relativeCoordY += State.yOffset.get(relativeAgentOrientation);
                 return ch;
             case 'L':
             case 'l':
@@ -362,47 +432,12 @@ public class Agent {
                 return ch;
             case 'U':
             case 'u':
-                objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
-                if (objectInFront == '-') {
-                    Coordinate c = null;
-                    switch (relativeAgentOrientation) {
-                        case 'N':
-                            c = new Coordinate(relativeCoordX, relativeCoordY - 1);
-                            break;
-                        case 'W':
-                            c = new Coordinate(relativeCoordX - 1, relativeCoordY);
-                            break;
-                        case 'S':
-                            c = new Coordinate(relativeCoordX, relativeCoordY + 1);
-                            break;
-                        case 'E':
-                            c = new Coordinate(relativeCoordX + 1, relativeCoordY);
-                            break;
-                    }
-                    blockadesRemoved.add(c);
-                }
                 return ch;
             case 'C':
             case 'c':
                 objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
                 if (objectInFront == 'T') {
                     hasRaft = true;
-                    Coordinate c = null;
-                    switch (relativeAgentOrientation) {
-                        case 'N':
-                            c = new Coordinate(relativeCoordX, relativeCoordY - 1);
-                            break;
-                        case 'W':
-                            c = new Coordinate(relativeCoordX - 1, relativeCoordY);
-                            break;
-                        case 'S':
-                            c = new Coordinate(relativeCoordX, relativeCoordY + 1);
-                            break;
-                        case 'E':
-                            c = new Coordinate(relativeCoordX + 1, relativeCoordY);
-                            break;
-                    }
-                    blockadesRemoved.add(c);
                 }
                 return ch;
             case 'B':
@@ -410,22 +445,6 @@ public class Agent {
                 objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
                 if (objectInFront == '*') {
                     dynamiteCount--;
-                    Coordinate c = null;
-                    switch (relativeAgentOrientation) {
-                        case 'N':
-                            c = new Coordinate(relativeCoordX, relativeCoordY - 1);
-                            break;
-                        case 'W':
-                            c = new Coordinate(relativeCoordX - 1, relativeCoordY);
-                            break;
-                        case 'S':
-                            c = new Coordinate(relativeCoordX, relativeCoordY + 1);
-                            break;
-                        case 'E':
-                            c = new Coordinate(relativeCoordX + 1, relativeCoordY);
-                            break;
-                    }
-                    blockadesRemoved.add(c);
                 }
                 return ch;
         }

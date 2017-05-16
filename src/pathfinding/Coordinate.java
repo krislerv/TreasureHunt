@@ -1,9 +1,11 @@
 package pathfinding;
 
+/**
+ * This class is used when all you are interested in is the coordinates and nothing else.
+ */
 public class Coordinate {
 
-    public final int x;
-    public final int y;
+    public final int x, y;
 
     public Coordinate(int x, int y) {
         this.x = x;

@@ -1,5 +1,6 @@
 package pathfinding;
 
+import agent.Agent;
 import agent.WorldModel;
 
 import java.util.*;
@@ -13,11 +14,10 @@ public class Explore {
      * @param worldModel the world model of the agent
      * @param relativeCoordX the relative x coordinate of the agent
      * @param relativeCoordY the relative y coordinate of the agent
-     * @param waterMode
-     * @param lumberjackMode
-     * @return a state that is an unexplored tile
+     * @param stage which stage the agent is currently in
+     * @return a state that is an unexplored tile, null if no tile is found
      */
-    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean waterMode, boolean lumberjackMode) {
+    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, Agent.Stage stage) {
         HashSet<State> discovered = new HashSet<>();
         ArrayList<State> queue = new ArrayList<>();
 
@@ -30,7 +30,7 @@ public class Explore {
                 System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
                 return currentState;
             }
-            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel, waterMode, lumberjackMode);
+            ArrayList<State> neighborStates = currentState.generateBFSNeighbors(worldModel, stage);
             for (State state : neighborStates) {
                 if (!discovered.contains(state)) {
                     discovered.add(state);
@@ -44,14 +44,14 @@ public class Explore {
 
     /**
      * Uses A* to find the shortest path from startState to goalState
+     *
      * @param startState the state to start the search from
      * @param goalState a goal state coordinate
-     * @param worldModel
-     * @param safeMode
-     * @param waterMode
-     * @return a list of states, from the start state to the goal state
+     * @param worldModel the world model of the agent
+     * @param stage which stage the agent is currently in
+     * @return a list of states forming a path from the start state to the goal state, empty list if no path is found
      */
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, boolean safeMode, boolean waterMode) {
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, Agent.Stage stage) {
         long startTime = System.currentTimeMillis();
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
@@ -75,7 +75,7 @@ public class Explore {
                 }
             }
             State currentState = bestState;
-                if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y && (currentState.getDynamiteCount() >= 0 || currentState.getDynamiteCount() < -200000)) {
+                if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y && (currentState.getDynamiteCount() >= 0 || currentState.getDynamiteCount() < -WorldModel.WORLD_HEIGHT*WorldModel.WORLD_WIDTH)) {
                 ArrayList<State> path = new ArrayList<>();
                 path.add(currentState);
                 while (currentState.getParent() != null) {
@@ -87,12 +87,10 @@ public class Explore {
             }
             openSet.remove(currentState);
             closedSet.add(currentState);
+
             ArrayList<State> neighborStates;
-            if (safeMode) {
-                neighborStates = currentState.generateAStarNeighbors(worldModel, currentState.getBlockadesRemoved());
-            } else {
-                neighborStates = currentState.generatePlannedAStarNeighbors(worldModel, currentState.getBlockadesRemoved(), waterMode);
-            }
+            neighborStates = currentState.generateAStarNeighbors(worldModel, stage);
+
             for (State state : neighborStates) {
                 if (closedSet.contains(state)) {
                     continue;
@@ -119,6 +117,14 @@ public class Explore {
         return new ArrayList<>();
     }
 
+    /**
+     * Uses Dijkstra's algorithm to find the shortest path to any tile with a given type.
+     *
+     * @param type the type of tile to look for
+     * @param startState the start state
+     * @param worldModel the world model of the agent
+     * @return a list of states forming a path from the start state to the goal state, empty list if no path is found
+     */
     public static ArrayList<State> findClosestTileOfType(char type, State startState, WorldModel worldModel) {
         ArrayList<Coordinate> coordinates = worldModel.getExploredTiles();
         ArrayList<State> states = new ArrayList<>();
@@ -170,6 +176,15 @@ public class Explore {
         return new ArrayList<>();
     }
 
+    /**
+     * Used by Dijkstra's algorithm to check if two states are adjacent (that the agent can move from s1 to s2 with one action).
+     *
+     * @param s1 the from-state
+     * @param s2 the to-state
+     * @param worldModel the world model of the agent
+     * @param type the type of tile the search algorithm is looking for
+     * @return true if the two states are neighbors, false otherwise
+     */
     private static boolean isNeighbor(State s1, State s2, WorldModel worldModel, char type) {
         if (!(worldModel.getObjectAtCoordinate(s1.getRelativeCoordX(), s1.getRelativeCoordY()) == ' ' && (worldModel.getObjectAtCoordinate(s2.getRelativeCoordX(), s2.getRelativeCoordY()) == ' ' || worldModel.getObjectAtCoordinate(s2.getRelativeCoordX(), s2.getRelativeCoordY()) == type))) {
             return false;

@@ -1,16 +1,14 @@
 package pathfinding;
 
+import agent.Agent;
 import agent.WorldModel;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.*;
 
 /**
  * This class is used in search algorithms to keep track of the world state in each node.
  */
-public class State implements Comparable<State> {
+public class State {
 
     /**
      * Keeps track of the relative coordinates of the agent.
@@ -48,8 +46,21 @@ public class State implements Comparable<State> {
      * For example: If the agent is moving north and wants to generate a new state with new coordinates,
      * you call the get method on the hash map with 'N' as parameter and you get 0 as the x-offset and -1 as the y-offset.
      */
-    private HashMap<Character, Integer> xOffset;
-    private HashMap<Character, Integer> yOffset;
+    public static final HashMap<Character, Integer> xOffset;
+    public static final HashMap<Character, Integer> yOffset;
+
+    static {
+        xOffset = new HashMap<>();
+        xOffset.put('N', 0);
+        xOffset.put('W', -1);
+        xOffset.put('S', 0);
+        xOffset.put('E', 1);
+        yOffset = new HashMap<>();
+        yOffset.put('N', -1);
+        yOffset.put('W', 0);
+        yOffset.put('S', 1);
+        yOffset.put('E', 0);
+    }
 
     /**
      * Constructor that sets up a state with default values (empty inventory)
@@ -63,16 +74,6 @@ public class State implements Comparable<State> {
 		this.relativeCoordY = relativeCoordY;
 		this.relativeAgentOrientation = relativeAgentOrientation;
         blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
-        xOffset = new HashMap<>();
-        xOffset.put('N', 0);
-        xOffset.put('W', -1);
-        xOffset.put('S', 0);
-        xOffset.put('E', 1);
-        yOffset = new HashMap<>();
-        yOffset.put('N', -1);
-        yOffset.put('W', 0);
-        yOffset.put('S', 1);
-        yOffset.put('E', 0);
     }
 
     /**
@@ -128,8 +129,6 @@ public class State implements Comparable<State> {
 
     char getRelativeAgentOrientation() { return relativeAgentOrientation; }
 
-    HashSet<Coordinate> getBlockadesRemoved() { return blockadesRemoved; }
-
     int getDynamiteCount() { return dynamiteCount; }
 
     public void setDynamiteCount(int dynamiteCount) { this.dynamiteCount = dynamiteCount; }
@@ -142,8 +141,6 @@ public class State implements Comparable<State> {
 
     void setG(int g) { this.g = g; }
 
-    private int getH() { return h; }
-
     void setH(int h) { this.h = h; }
 
     /**
@@ -154,7 +151,10 @@ public class State implements Comparable<State> {
     int getF() { return g + h; }
 
     /**
-     * Calculates the heuristic value for the state
+     * Calculates the heuristic value for the state. Uses the manhattan distance from current position to goal position.
+     * If the agent has a negative amount of dynamite, add onto the heuristic the manhattan distance to the closest dynamite.
+     * The search function is sometimes called in such a way to disallow the use of dynamite or to make the agent collect as
+     * many dynamite as possible.
      *
      * @param goalState the state the algorithm is trying to reach
      * @param worldModel the world model of the agent
@@ -162,30 +162,45 @@ public class State implements Comparable<State> {
      */
     int heuristic(Coordinate goalState, WorldModel worldModel) {
         int minDynamiteDistance = 0;
-        if (dynamiteCount < 0 && dynamiteCount > -20000) {
+        if (dynamiteCount < 0 && dynamiteCount > -WorldModel.WORLD_HEIGHT*WorldModel.WORLD_WIDTH) {
             minDynamiteDistance = worldModel.getMinDynamiteDistance(relativeCoordX, relativeCoordY);
         }
         return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + minDynamiteDistance;
     }
 
-    ArrayList<State> generateNeighbors(WorldModel worldModel, boolean waterMode, boolean lumberjackMode) {
+    /**
+     * Generates neighbor states for use in BFS algorithm
+     *
+     * @param worldModel the world model of the agent
+     * @param stage which stage the agent is currently in
+     * @return a list of states containing the neighbors of this state
+     */
+    ArrayList<State> generateBFSNeighbors(WorldModel worldModel, Agent.Stage stage) {
         ArrayList<State> newStates = new ArrayList<>();
-        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey, new HashSet<>(), stage)) {
             newStates.add(new State(relativeCoordX - 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey, new HashSet<>(), stage)) {
             newStates.add(new State(relativeCoordX, relativeCoordY - 1, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey, new HashSet<>(), stage)) {
             newStates.add(new State(relativeCoordX + 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey, new HashSet<>(), stage)) {
             newStates.add(new State(relativeCoordX, relativeCoordY + 1, 'N'));
         }
         return newStates;
     }
 
-    ArrayList<State> generateAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved) {
+    /**
+     * Generates neighbor states for use in A* algorithm
+     *
+     * @param worldModel the world model of the agent
+     * @param stage which stage the agent is currently in. Safe mode can only move on land and unlock doors.
+     *             Water mode can only move on water. Planned mode can do everything.
+     * @return a list of states containing the neighbors of this state
+     */
+    ArrayList<State> generateAStarNeighbors(WorldModel worldModel, Agent.Stage stage) {
         ArrayList<State> newStates = new ArrayList<>();
         switch (relativeAgentOrientation) {
             case 'N':
@@ -199,51 +214,7 @@ public class State implements Comparable<State> {
                 newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
                 break;
         }
-        if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
-            newStates.add(new State(
-                    relativeCoordX + xOffset.get(relativeAgentOrientation),
-                    relativeCoordY + yOffset.get(relativeAgentOrientation),
-                    relativeAgentOrientation,
-                    blockadesRemoved,
-                    hasGold,
-                    hasKey,
-                    hasAxe,
-                    hasRaft,
-                    onRaft,
-                    dynamiteCount));
-        }
-        if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-') {
-            newStates.add(new State(
-                    relativeCoordX,
-                    relativeCoordY,
-                    relativeAgentOrientation,
-                    blockadesRemoved,
-                    new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
-                    hasGold,
-                    hasKey,
-                    hasAxe,
-                    hasRaft,
-                    onRaft,
-                    dynamiteCount));
-        }
-        return newStates;
-    }
-
-    ArrayList<State> generatePlannedAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved, boolean waterMode) {
-        ArrayList<State> newStates = new ArrayList<>();
-        switch (relativeAgentOrientation) {
-            case 'N':
-            case 'S':
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'W', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'E', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
-                break;
-            case 'W':
-            case 'E':
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'N', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
-                newStates.add(new State(relativeCoordX, relativeCoordY, 'S', blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
-                break;
-        }
-        if (waterMode) {
+        if (stage == Agent.Stage.WATER) {
             if ((hasRaft || onRaft) && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '~') {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
@@ -257,22 +228,9 @@ public class State implements Comparable<State> {
                         true,
                         dynamiteCount));
             }
-        } else {
-            if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
-                newStates.add(new State(
-                        relativeCoordX,
-                        relativeCoordY,
-                        relativeAgentOrientation,
-                        blockadesRemoved,
-                        new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
-                        hasGold,
-                        hasKey,
-                        hasAxe,
-                        hasRaft,
-                        onRaft,
-                        dynamiteCount));
-            }                                                                                                               // uncommenting this fucks board 4 for some reason
-            else if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
+        }
+        if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.LUMBERJACK) {
+            if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
@@ -367,6 +325,22 @@ public class State implements Comparable<State> {
                         false,
                         dynamiteCount + 1));
             }
+        }
+        if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.SAFE  || stage == Agent.Stage.LUMBERJACK) {
+            if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
+                newStates.add(new State(
+                        relativeCoordX,
+                        relativeCoordY,
+                        relativeAgentOrientation,
+                        blockadesRemoved,
+                        new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                        hasGold,
+                        hasKey,
+                        hasAxe,
+                        hasRaft,
+                        onRaft,
+                        dynamiteCount));
+            }
             else if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
                 boolean steppingOutOfWater = false;
                 if (worldModel.getObjectAtCoordinate(relativeCoordX, relativeCoordY) == '~') {  // if the agent cut down a tree while in the water, then stepped right out of the water, make sure to remove raft
@@ -384,7 +358,6 @@ public class State implements Comparable<State> {
                         false,
                         dynamiteCount));
             }
-
         }
         return newStates;
     }
@@ -432,15 +405,6 @@ public class State implements Comparable<State> {
                 hasRaft == ((State)object).hasRaft &&
                 onRaft == ((State)object).onRaft &&
                 dynamiteCount == ((State)object).dynamiteCount;
-    }
-
-    @Override
-    public int compareTo(State otherState) {
-        if (getF() != otherState.getF()) {
-            return this.getF() - otherState.getF();
-        } else {
-            return this.getH() - otherState.getH();
-        }
     }
 
 }
