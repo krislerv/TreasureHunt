@@ -7,25 +7,57 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 
+/**
+ * This class is used in search algorithms to keep track of the world state in each node.
+ */
 public class State implements Comparable<State> {
-	
+
+    /**
+     * Keeps track of the relative coordinates of the agent.
+     */
 	private final int relativeCoordX, relativeCoordY;
+
+    /**
+     * Keeps track of the orientation of the agent.
+     */
 	private final char relativeAgentOrientation;
 
-	private int f, g, h;
+    /**
+     * G and H values used in A* and Dijkstra.
+     */
+	private int g, h;
 
+    /**
+     * Agent inventory.
+     */
     private boolean hasGold, hasKey, hasAxe, hasRaft, onRaft;
     private int dynamiteCount;
-    private int distance;
-	
+
+    /**
+     * Keeps track of the state's parent to be used to generate a path in search algorithms.
+     */
 	private State parent;
 
+    /**
+     * Contains coordinates for all walls that have been blown up, doors unlocked, trees cut down, dynamite picked up.
+     */
 	private HashSet<Coordinate> blockadesRemoved;
 
+    /**
+     * Hash maps that specify the position offset of new states when moving in a certain direction.
+     * For example: If the agent is moving north and wants to generate a new state with new coordinates,
+     * you call the get method on the hash map with 'N' as parameter and you get 0 as the x-offset and -1 as the y-offset.
+     */
     private HashMap<Character, Integer> xOffset;
     private HashMap<Character, Integer> yOffset;
 
-
+    /**
+     * Constructor that sets up a state with default values (empty inventory)
+     *
+     * @param relativeCoordX the relative x coordinate of the agent
+     * @param relativeCoordY the relative y coordinate of the agent
+     * @param relativeAgentOrientation the relative orientation of the agent
+     */
     public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
 		this.relativeCoordX = relativeCoordX;
 		this.relativeCoordY = relativeCoordY;
@@ -43,6 +75,20 @@ public class State implements Comparable<State> {
         yOffset.put('E', 0);
     }
 
+    /**
+     * Constructor that sets up a state with the given inventory
+     *
+     * @param relativeCoordX the relative x coordinate of the agent
+     * @param relativeCoordY the relative y coordinate of the agent
+     * @param relativeAgentOrientation the relative orientation of the agent
+     * @param blockadesRemoved a HashSet of the blockades that have been removed
+     * @param hasGold if the agent has collected the gold
+     * @param hasKey if the agent has collected the key
+     * @param hasAxe if the agent has collected the axe
+     * @param hasRaft if the agent has collected the raft
+     * @param onRaft if the agent is on a raft
+     * @param dynamiteCount how many dynamites the agent has
+     */
 	public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, boolean onRaft, int dynamiteCount) {
         this(relativeCoordX, relativeCoordY, relativeAgentOrientation);
         for (Coordinate c : blockadesRemoved) {
@@ -56,28 +102,73 @@ public class State implements Comparable<State> {
         this.dynamiteCount = dynamiteCount;
     }
 
-    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, boolean onRaft, int dynamiteCount) {
+    /**
+     * Constructor that sets up a state with the given inventory and adds another coordinate to blockadesRemoved
+     *
+     * @param relativeCoordX the relative x coordinate of the agent
+     * @param relativeCoordY the relative y coordinate of the agent
+     * @param relativeAgentOrientation the relative orientation of the agent
+     * @param blockadesRemoved a HashSet of the blockades that have been removed
+     * @param newDoorUnlock a new coordinate to be added to blockadesRemoved
+     * @param hasGold if the agent has collected the gold
+     * @param hasKey if the agent has collected the key
+     * @param hasAxe if the agent has collected the axe
+     * @param hasRaft if the agent has collected the raft
+     * @param onRaft if the agent is on a raft
+     * @param dynamiteCount how many dynamites the agent has
+     */
+    private State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, boolean onRaft, int dynamiteCount) {
 	    this(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount);
         this.blockadesRemoved.add(newDoorUnlock);
     }
 
-	public int getRelativeCoordX() {
-	    return  relativeCoordX;
+	public int getRelativeCoordX() { return  relativeCoordX; }
+
+    public int getRelativeCoordY() { return  relativeCoordY; }
+
+    char getRelativeAgentOrientation() { return relativeAgentOrientation; }
+
+    HashSet<Coordinate> getBlockadesRemoved() { return blockadesRemoved; }
+
+    int getDynamiteCount() { return dynamiteCount; }
+
+    public void setDynamiteCount(int dynamiteCount) { this.dynamiteCount = dynamiteCount; }
+
+    State getParent() { return parent; }
+
+    void setParent(State parent) { this.parent = parent; }
+
+    int getG() { return g; }
+
+    void setG(int g) { this.g = g; }
+
+    private int getH() { return h; }
+
+    void setH(int h) { this.h = h; }
+
+    /**
+     * Returns the F-value of the state to be used in A*
+     *
+     * @return the F-value of the state to be used in A*
+     */
+    int getF() { return g + h; }
+
+    /**
+     * Calculates the heuristic value for the state
+     *
+     * @param goalState the state the algorithm is trying to reach
+     * @param worldModel the world model of the agent
+     * @return the heuristic value for the state
+     */
+    int heuristic(Coordinate goalState, WorldModel worldModel) {
+        int minDynamiteDistance = 0;
+        if (dynamiteCount < 0 && dynamiteCount > -20000) {
+            minDynamiteDistance = worldModel.getMinDynamiteDistance(relativeCoordX, relativeCoordY);
+        }
+        return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + minDynamiteDistance;
     }
 
-    public int getRelativeCoordY() {
-        return  relativeCoordY;
-    }
-
-    public char getRelativeAgentOrientation() {
-	    return relativeAgentOrientation;
-    }
-
-    public HashSet<Coordinate> getBlockadesRemoved() {
-	    return blockadesRemoved;
-    }
-
-    public ArrayList<State> generateNeighbors(WorldModel worldModel, boolean waterMode, boolean lumberjackMode) {
+    ArrayList<State> generateNeighbors(WorldModel worldModel, boolean waterMode, boolean lumberjackMode) {
         ArrayList<State> newStates = new ArrayList<>();
         if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
             newStates.add(new State(relativeCoordX - 1, relativeCoordY, 'N'));
@@ -94,99 +185,7 @@ public class State implements Comparable<State> {
         return newStates;
     }
 
-    public void setDynamiteCount(int dynamiteCount) {
-        this.dynamiteCount = dynamiteCount;
-    }
-
-	public State getParent() {
-		return parent;
-	}
-	
-	public void setParent(State parent) {
-		this.parent = parent;
-	}
-
-	@Override
-	public String toString() {
-		return "(" + relativeCoordX + ", " + relativeCoordY + ", " + relativeAgentOrientation + ")";
-	}
-
-    @Override
-    public int hashCode() {
-        return Arrays.hashCode(new Object[] {
-                relativeCoordX,
-                relativeCoordY,
-                relativeAgentOrientation,
-                blockadesRemoved,
-                hasGold,
-                hasKey,
-                hasAxe,
-                hasRaft,
-                dynamiteCount,
-                onRaft
-        });
-    }
-
-    @Override
-    public boolean equals(Object object) {
-        if (blockadesRemoved.size() != ((State)object).blockadesRemoved.size()) {
-	        return false;
-        }
-	    for (Coordinate c : blockadesRemoved) {
-	        if (!((State)object).blockadesRemoved.contains(c)) {
-	            return false;
-            }
-        }
-        return relativeCoordX == ((State)object).relativeCoordX &&
-                relativeCoordY == ((State)object).relativeCoordY &&
-                relativeAgentOrientation == ((State)object).relativeAgentOrientation &&
-                hasGold == ((State)object).hasGold &&
-                hasKey == ((State)object).hasKey &&
-                hasAxe == ((State)object).hasAxe &&
-                hasRaft == ((State)object).hasRaft &&
-                onRaft == ((State)object).onRaft &&
-                dynamiteCount == ((State)object).dynamiteCount;
-    }
-
-    public int getG() {
-        return g;
-    }
-
-    public void updateG(int g) {
-        this.g = g;
-        this.f = g + h;
-    }
-
-    public int getH() {
-        return h;
-    }
-
-    public int getF() {
-	    return f;
-    }
-
-    public void setH(int h) {
-        this.h = h;
-    }
-
-    public int heuristic(Coordinate goalState, WorldModel worldModel) {
-        int minDynamiteDistance = 0;
-        if (dynamiteCount < 0 && dynamiteCount > -20000) {
-            minDynamiteDistance = worldModel.getMinDynamiteDistance(relativeCoordX, relativeCoordY);
-        }
-        return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + minDynamiteDistance;
-    }
-
-    @Override
-    public int compareTo(State otherState) {
-        if (getF() != otherState.f) {
-            return this.f - otherState.f;
-        } else {
-            return this.h - otherState.h;
-        }
-    }
-
-    public ArrayList<State> generateAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved) {
+    ArrayList<State> generateAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved) {
         ArrayList<State> newStates = new ArrayList<>();
         switch (relativeAgentOrientation) {
             case 'N':
@@ -201,7 +200,17 @@ public class State implements Comparable<State> {
                 break;
         }
         if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
-            newStates.add(new State(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation), relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount));
+            newStates.add(new State(
+                    relativeCoordX + xOffset.get(relativeAgentOrientation),
+                    relativeCoordY + yOffset.get(relativeAgentOrientation),
+                    relativeAgentOrientation,
+                    blockadesRemoved,
+                    hasGold,
+                    hasKey,
+                    hasAxe,
+                    hasRaft,
+                    onRaft,
+                    dynamiteCount));
         }
         if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-') {
             newStates.add(new State(
@@ -220,7 +229,7 @@ public class State implements Comparable<State> {
         return newStates;
     }
 
-    public ArrayList<State> generatePlannedAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved, boolean waterMode) {
+    ArrayList<State> generatePlannedAStarNeighbors(WorldModel worldModel, HashSet<Coordinate> blockadesRemoved, boolean waterMode) {
         ArrayList<State> newStates = new ArrayList<>();
         switch (relativeAgentOrientation) {
             case 'N':
@@ -380,15 +389,58 @@ public class State implements Comparable<State> {
         return newStates;
     }
 
-    public int getDynamiteCount() {
-        return dynamiteCount;
+    @Override
+    public String toString() {
+        return "(" + relativeCoordX + ", " + relativeCoordY + ", " + relativeAgentOrientation + ")";
     }
 
-    public void setDistance(int distance) {
-        this.distance = distance;
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(new Object[] {
+                relativeCoordX,
+                relativeCoordY,
+                relativeAgentOrientation,
+                blockadesRemoved,
+                hasGold,
+                hasKey,
+                hasAxe,
+                hasRaft,
+                dynamiteCount,
+                onRaft
+        });
     }
 
-    public int getDistance() {
-        return distance;
+    @Override
+    public boolean equals(Object object) {
+        if (!(object instanceof State)) {
+            return false;
+        }
+        if (blockadesRemoved.size() != ((State)object).blockadesRemoved.size()) {
+            return false;
+        }
+        for (Coordinate c : blockadesRemoved) {
+            if (!((State)object).blockadesRemoved.contains(c)) {
+                return false;
+            }
+        }
+        return relativeCoordX == ((State)object).relativeCoordX &&
+                relativeCoordY == ((State)object).relativeCoordY &&
+                relativeAgentOrientation == ((State)object).relativeAgentOrientation &&
+                hasGold == ((State)object).hasGold &&
+                hasKey == ((State)object).hasKey &&
+                hasAxe == ((State)object).hasAxe &&
+                hasRaft == ((State)object).hasRaft &&
+                onRaft == ((State)object).onRaft &&
+                dynamiteCount == ((State)object).dynamiteCount;
     }
+
+    @Override
+    public int compareTo(State otherState) {
+        if (getF() != otherState.getF()) {
+            return this.getF() - otherState.getF();
+        } else {
+            return this.getH() - otherState.getH();
+        }
+    }
+
 }

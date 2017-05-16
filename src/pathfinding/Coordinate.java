@@ -17,7 +17,7 @@ public class Coordinate {
 
     @Override
     public boolean equals(Object other) {
-        return x == ((Coordinate) other).x && y == ((Coordinate) other).y;
+        return other instanceof Coordinate && x == ((Coordinate) other).x && y == ((Coordinate) other).y;
     }
 
     @Override

@@ -1,7 +1,6 @@
 package agent;
 
 import pathfinding.Coordinate;
-import pathfinding.DijkstraCoordinate;
 import pathfinding.State;
 
 import java.util.*;

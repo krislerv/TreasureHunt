@@ -46,7 +46,7 @@ public class Agent {
     }
 
     private boolean explore(boolean safeMode, boolean waterMode, boolean lumberjackMode) {
-        State unexploredTile = Explore.findUnexploredTile2(
+        State unexploredTile = Explore.findUnexploredTile(
                 new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 worldModel,
                 relativeCoordX,
@@ -67,12 +67,15 @@ public class Agent {
 
         System.out.println(path);
 
-        ArrayList<Character> actions = Explore.generateActions(path, worldModel);
-        //System.out.println(actions);
-        moveBuffer = actions;
+        moveBuffer = Explore.generateActions(path, worldModel);
         return !moveBuffer.isEmpty();
     }
 
+    /**
+     * Tries to safely collect items.
+     *
+     * @return if an item is found, returns the path to the item. Otherwise returns an empty list.
+     */
     private boolean collect() {
         ArrayList<Character> objects = new ArrayList<>(Arrays.asList('$', 'k', 'd', 'a'));  // the priority order for objects
         for (Character objectType : objects) {                  // for each object type
@@ -93,7 +96,7 @@ public class Agent {
                             false);
                     if (path.size() != 0) {     // if the returned path is not empty, a path was found
                         moveBuffer = Explore.generateActions(path, worldModel);
-                        System.out.println("MOVEBUFFER " + moveBuffer);
+                        System.out.println("MOVE BUFFER " + moveBuffer);
                         System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
                         System.out.println(objectType + " " + coordinate + " " + path);
                         return true;
@@ -104,10 +107,10 @@ public class Agent {
         return false;
     }
 
-    private boolean solutionExplore() {
+    private void solutionExplore() {
         ArrayList<Coordinate> goldStates = worldModel.getObjectsTiles('$');
         if (goldStates.size() == 0) {
-            return false;
+            return;
         }
         for (Coordinate coordinate : goldStates) {
             int dynamiteAvailable = worldModel.getAvailableDynamite();  // finds the number of known dynamites in the world
@@ -134,17 +137,14 @@ public class Agent {
                         false,
                         false);
                 if (path2.size() != 0) {
-                    //moveBuffer = Explore.generateActions(path, worldModel); // don't need to include this because when we generate the path in the second call to findPath(), it will go from (0,0) to startState, but because
-                    // we took startState directly from the path from the first call to findPath() it will still have parents from that call
                     moveBuffer = Explore.generateActions(path2, worldModel);
-                    System.out.println("MOVEBUFFER " + moveBuffer);
+                    System.out.println("MOVE BUFFER " + moveBuffer);
                     System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
                     System.out.println("$$$" + " " + coordinate + " " + path2);
-                    return true;
+                    return;
                 }
             }
         }
-        return false;
     }
 
     private boolean getRaft() {
@@ -161,7 +161,7 @@ public class Agent {
                     false);
             if (path.size() != 0) {     // if the returned path is not empty, a path was found
                 moveBuffer = Explore.generateActions(path, worldModel);
-                System.out.println("MOVEBUFFER " + moveBuffer);
+                System.out.println("MOVE BUFFER " + moveBuffer);
                 System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
                 System.out.println("get raft" + " " + coordinate + " " + path);
                 return true;
@@ -170,41 +170,15 @@ public class Agent {
         return false;
     }
 
-    private boolean goToWater() {
+    private void goToWater() {
         ArrayList<State> path = Explore.findClosestTileOfType('~', new State(relativeCoordX, relativeCoordY, relativeAgentOrientation), worldModel);
         if (path.size() != 0) {     // if the returned path is not empty, a path was found
             moveBuffer = Explore.generateActions(path, worldModel);
-            System.out.println("MOVEBUFFER " + moveBuffer);
+            System.out.println("MOVE BUFFER " + moveBuffer);
             System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
             System.out.println("go to water" + " " + " " + path);
-            return true;
         }
-        return false;
-        /*ArrayList<Coordinate> waterStates = worldModel.getObjectsTiles('~');
-        if (waterStates.size() == 0) {
-            return false;
-        }
-        for (Coordinate coordinate : waterStates) {
-            ArrayList<State> path = Explore.findPath(
-                    new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, false, -Integer.MAX_VALUE),
-                    coordinate,
-                    worldModel,
-                    false,
-                    false);
-            if (path.size() != 0) {     // if the returned path is not empty, a path was found
-                moveBuffer = Explore.generateActions(path, worldModel);
-                System.out.println("MOVEBUFFER " + moveBuffer);
-                System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
-                System.out.println("go to water" + " " + coordinate + " " + path);
-                return true;
-            }
-        }
-        return false;*/
     }
-
-    /*private boolean bomberman() {
-
-    }*/
 
     private boolean goHome() {
         ArrayList<State> path = Explore.findPath(
@@ -267,7 +241,6 @@ public class Agent {
             if (moveBuffer.isEmpty() && !hasRaft && !onRaft) {
                 System.out.println("GET RAFT");
                 if (getRaft()) {    // if we cut down a tree to get a raft, try to explore new areas before using the raft
-                    //hasRaft = true;
                     currentStage = Stage.EXPLORE;
                     priority = 9;
                 }
@@ -457,26 +430,6 @@ public class Agent {
                 return ch;
         }
         return 0;
-    }
-
-    private void print_view(char view[][])
-    {
-        int i,j;
-
-        System.out.println("\n+-----+");
-        for( i=0; i < 5; i++ ) {
-            System.out.print("|");
-            for( j=0; j < 5; j++ ) {
-                if(( i == 2 )&&( j == 2 )) {
-                    System.out.print('^');
-                }
-                else {
-                    System.out.print( view[i][j] );
-                }
-            }
-            System.out.println("|");
-        }
-        System.out.println("+-----+");
     }
 
     public static void main( String[] args )

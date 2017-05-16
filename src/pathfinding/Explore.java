@@ -1,6 +1,5 @@
 package pathfinding;
 
-import agent.Agent;
 import agent.WorldModel;
 
 import java.util.*;
@@ -8,39 +7,17 @@ import java.util.*;
 public class Explore {
 
     /**
-     * Uses DFS to find an unexplored tile (a tile where, if the agent stood in it, would reveal tiles not yet seen)
-     * @param currentState The current state of the agent
-     * @return A state in an unexplored tile
+     * Uses BFS to find an unexplored tile (a tile where, if the agent stood in it, would reveal tiles not yet seen)
+
+     * @param currentState the current state of the agent
+     * @param worldModel the world model of the agent
+     * @param relativeCoordX the relative x coordinate of the agent
+     * @param relativeCoordY the relative y coordinate of the agent
+     * @param waterMode
+     * @param lumberjackMode
+     * @return a state that is an unexplored tile
      */
-    /*public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean waterMode) {
-        System.out.println("DFS");
-        HashSet<State> discovered = new HashSet<>();
-        Stack<State> stack = new Stack<>();
-
-        discovered.add(currentState);
-        stack.push(currentState);
-
-        while (!stack.isEmpty()) {
-            currentState = stack.pop();
-            if (worldModel.unexplored(currentState) && !(currentState.getRelativeCoordX() == relativeCoordX && currentState.getRelativeCoordY() == relativeCoordY)) {
-                System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
-                return currentState;
-            }
-            ArrayList<State> neighborStates = currentState.generateNeighbors(worldModel, waterMode);
-            for (State state : neighborStates) {
-                if (!discovered.contains(state)) {
-                    discovered.add(state);
-                    state.setParent(currentState);
-                    stack.push(state);
-                }
-            }
-        }
-        //System.out.println("DFS");
-        //System.out.println(discovered);
-        return null;
-    }*/
-
-    public static State findUnexploredTile2(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean waterMode, boolean lumberjackMode) {
+    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, boolean waterMode, boolean lumberjackMode) {
         HashSet<State> discovered = new HashSet<>();
         ArrayList<State> queue = new ArrayList<>();
 
@@ -69,6 +46,9 @@ public class Explore {
      * Uses A* to find the shortest path from startState to goalState
      * @param startState the state to start the search from
      * @param goalState a goal state coordinate
+     * @param worldModel
+     * @param safeMode
+     * @param waterMode
      * @return a list of states, from the start state to the goal state
      */
     public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, boolean safeMode, boolean waterMode) {
@@ -80,7 +60,7 @@ public class Explore {
 
         startState.setH(startState.heuristic(goalState, worldModel));
 
-        startState.updateG(0);
+        startState.setG(0);
 
         while (!openSet.isEmpty()) {
             /*if (System.currentTimeMillis() - startTime > 5000) {
@@ -133,7 +113,7 @@ public class Explore {
                     }
                 }
                 state.setParent(currentState);
-                state.updateG(tentativeGScore);
+                state.setG(tentativeGScore);
             }
         }
         return new ArrayList<>();
@@ -152,19 +132,18 @@ public class Explore {
             ));
         }
         for (State state : states) {
-            state.setDistance(Integer.MAX_VALUE);
+            state.setG(Integer.MAX_VALUE);
         }
-
-        startState.setDistance(0);
+        startState.setG(0);
         states.add(startState);
 
         while (!states.isEmpty()) {
             State bestState = null;
             int bestCoordinateValue = Integer.MAX_VALUE;
             for (State state : states) {
-                if (state.getDistance() < bestCoordinateValue) {
+                if (state.getG() < bestCoordinateValue) {
                     bestState = state;
-                    bestCoordinateValue = state.getDistance();
+                    bestCoordinateValue = state.getG();
                 }
             }
             if (worldModel.getObjectAtCoordinate(bestState.getRelativeCoordX(), bestState.getRelativeCoordY()) == type) {
@@ -180,9 +159,9 @@ public class Explore {
             states.remove(bestState);
             for (State state : states) {
                 if (isNeighbor(bestState, state, worldModel, type)) {
-                    int alt = bestState.getDistance() + 1;
-                    if (alt < state.getDistance()) {
-                        state.setDistance(alt);
+                    int alt = bestState.getG() + 1;
+                    if (alt < state.getG()) {
+                        state.setG(alt);
                         state.setParent(bestState);
                     }
                 }
@@ -190,50 +169,6 @@ public class Explore {
         }
         return new ArrayList<>();
     }
-
-    /*
-    public static int leastDynamitePath(DijkstraCoordinate startState, DijkstraCoordinate goalState, WorldModel worldModel) {
-
-        ArrayList<DijkstraCoordinate> coordinates = worldModel.getExploredTiles();
-
-        for (DijkstraCoordinate coordinate : coordinates) {
-            coordinate.setDistance(Integer.MAX_VALUE);
-        }
-
-        startState.setDistance(0);
-        coordinates.add(startState);
-
-        while (!coordinates.isEmpty()) {
-            DijkstraCoordinate bestCoordinate = null;
-            int bestCoordinateValue = Integer.MAX_VALUE;
-            for (DijkstraCoordinate coordinate : coordinates) {
-                if (coordinate.getDistance() < bestCoordinateValue) {
-                    bestCoordinate = coordinate;
-                    bestCoordinateValue = coordinate.getDistance();
-                }
-            }
-            if (bestCoordinate.x == goalState.x && bestCoordinate.y == goalState.y) {
-                return (int) Math.floor(bestCoordinate.getDistance() / 1000);
-            }
-            coordinates.remove(bestCoordinate);
-            for (DijkstraCoordinate coordinate : coordinates) {
-                if (isNeighbor(bestCoordinate, coordinate)) {
-                    int alt;
-                    if (worldModel.getObjectAtCoordinate(coordinate.x, coordinate.y) == '*') {
-                        alt = bestCoordinate.getDistance() + 1000;
-                    } else {
-                        alt = bestCoordinate.getDistance() + 1;
-                    }
-                    if (alt < coordinate.getDistance()) {
-                        coordinate.setDistance(alt);
-                        coordinate.setParent(bestCoordinate);
-                    }
-                }
-            }
-        }
-        return -1;
-    }
-    */
 
     private static boolean isNeighbor(State s1, State s2, WorldModel worldModel, char type) {
         if (!(worldModel.getObjectAtCoordinate(s1.getRelativeCoordX(), s1.getRelativeCoordY()) == ' ' && (worldModel.getObjectAtCoordinate(s2.getRelativeCoordX(), s2.getRelativeCoordY()) == ' ' || worldModel.getObjectAtCoordinate(s2.getRelativeCoordX(), s2.getRelativeCoordY()) == type))) {
@@ -263,10 +198,12 @@ public class Explore {
 
     /**
      * Takes a list of states and produces a list of characters to make the agent move along the path
+     *
      * @param path the path the agent is supposed to move along
+     * @param worldModel the world model of the agent
      * @return a list of characters indicating the moves the agent should make
      */
-    public static ArrayList<Character> generateActions(ArrayList<State> path, WorldModel worldModel) {//, char currentAgentOrientation, WorldModel worldModel) {
+    public static ArrayList<Character> generateActions(ArrayList<State> path, WorldModel worldModel) {
         ArrayList<Character> actions = new ArrayList<>();
         for (int i = 0; i < path.size() - 1; i++) {
             State fromState = path.get(i);
