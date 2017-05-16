@@ -37,7 +37,7 @@ public class Agent {
         worldModel = new WorldModel();
         relativeCoordX = 0;
         relativeCoordY = 0;
-        relativeAgentOrientation = 'S'; // we don't know which way we're facing (and it doesn't matter), so just call the initial direction south
+        relativeAgentOrientation = 'W'; // we don't know which way we're facing (and it doesn't matter), so just call the initial direction south
         moveBuffer = new ArrayList<>();
         currentStage = Stage.EXPLORE;
         blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
