@@ -4,9 +4,7 @@ import pathfinding.Coordinate;
 import pathfinding.DijkstraCoordinate;
 import pathfinding.State;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.*;
 
 public class WorldModel {
 
@@ -92,8 +90,11 @@ public class WorldModel {
         return false;
     }
 
-    public boolean positionBlocked(int relativeCoordX, int relativeCoordY, boolean hasKey, HashSet<Coordinate> blockadesRemoved, boolean waterMode) {
+    public boolean positionBlocked(int relativeCoordX, int relativeCoordY, boolean hasKey, HashSet<Coordinate> blockadesRemoved, boolean waterMode, boolean lumberjackMode) {
         ArrayList<Character> blockades = new ArrayList<>(Arrays.asList('~', '.', '*', 'T', '-', '?'));
+        if (lumberjackMode) {
+            blockades = new ArrayList<>(Arrays.asList('.', '*', '-', '?'));
+        }
         if (hasKey) {
             blockades.remove((Character)'-');
         }
@@ -168,6 +169,12 @@ public class WorldModel {
         return objectTiles;
     }
 
+    public ArrayList<Coordinate> getObjectsTilesSortedByDistance(Character objectType, State currentState) {
+        ArrayList<Coordinate> objectTiles = getObjectsTiles(objectType);
+        objectTiles.sort(Comparator.comparingInt(c -> (Math.abs(c.x - currentState.getRelativeCoordX()) + Math.abs(c.y - currentState.getRelativeCoordY()))));
+        return objectTiles;
+    }
+
     public char getObjectInFront(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation) {
         switch (relativeAgentOrientation) {
             case 'N':
@@ -186,12 +193,12 @@ public class WorldModel {
         return world.get(baseCoordY + relativeCoordY).get(baseCoordX + relativeCoordX);
     }
 
-    public ArrayList<DijkstraCoordinate> getExploredTiles() {
-        ArrayList<DijkstraCoordinate> coordinates = new ArrayList<>();
+    public ArrayList<Coordinate> getExploredTiles() {
+        ArrayList<Coordinate> coordinates = new ArrayList<>();
         for (int i = -WORLD_HEIGHT/2; i < WORLD_HEIGHT/2; i++) {
             for (int j = -WORLD_WIDTH/2; j < WORLD_WIDTH/2; j++) {
                 if (getObjectAtCoordinate(j, i) != '?') {
-                    coordinates.add(new DijkstraCoordinate(j, i));
+                    coordinates.add(new Coordinate(j, i));
                 }
             }
         }

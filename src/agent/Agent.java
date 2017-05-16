@@ -21,6 +21,8 @@ public class Agent {
     private boolean hasGold, hasKey, hasAxe, hasRaft, onRaft;
     private int dynamiteCount;
 
+    private boolean noop;
+
     private ArrayList<Character> moveBuffer;
 
     private Stage currentStage;
@@ -28,7 +30,7 @@ public class Agent {
     private HashSet<Coordinate> blockadesRemoved;
 
     public enum Stage {
-        EXPLORE, PLANNED, UNSAFE, BOMBERMAN
+        EXPLORE, PLANNED, UNSAFE, LUMBERJACK
     }
 
     private int priority;
@@ -43,20 +45,21 @@ public class Agent {
         blockadesRemoved = new HashSet<>(); //  doors opened, walls blown up, trees cut down
     }
 
-    private boolean explore(boolean safeMode, boolean waterMode) {
+    private boolean explore(boolean safeMode, boolean waterMode, boolean lumberjackMode) {
         State unexploredTile = Explore.findUnexploredTile2(
                 new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 worldModel,
                 relativeCoordX,
                 relativeCoordY,
-                waterMode);
+                waterMode,
+                lumberjackMode);
 
         if (unexploredTile == null) {
             return false;
         }
 
         ArrayList<State> path = Explore.findPath(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, waterMode, dynamiteCount),
+                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, waterMode || (lumberjackMode && onRaft), dynamiteCount),
                 new Coordinate(unexploredTile.getRelativeCoordX(), unexploredTile.getRelativeCoordY()),
                 worldModel,
                 safeMode,
@@ -144,14 +147,46 @@ public class Agent {
         return false;
     }
 
+    private boolean getRaft() {
+        ArrayList<Coordinate> treeStates = worldModel.getObjectsTilesSortedByDistance('T', new State(relativeCoordX, relativeCoordY, relativeAgentOrientation));
+        if (treeStates.size() == 0) {
+            return false;
+        }
+        for (Coordinate coordinate : treeStates) {
+            ArrayList<State> path = Explore.findPath(
+                    new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, false, false, -Integer.MAX_VALUE),
+                    coordinate,
+                    worldModel,
+                    false,
+                    false);
+            if (path.size() != 0) {     // if the returned path is not empty, a path was found
+                moveBuffer = Explore.generateActions(path, worldModel);
+                System.out.println("MOVEBUFFER " + moveBuffer);
+                System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
+                System.out.println("get raft" + " " + coordinate + " " + path);
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean goToWater() {
-        ArrayList<Coordinate> waterStates = worldModel.getObjectsTiles('~');
+        ArrayList<State> path = Explore.findClosestTileOfType('~', new State(relativeCoordX, relativeCoordY, relativeAgentOrientation), worldModel);
+        if (path.size() != 0) {     // if the returned path is not empty, a path was found
+            moveBuffer = Explore.generateActions(path, worldModel);
+            System.out.println("MOVEBUFFER " + moveBuffer);
+            System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
+            System.out.println("go to water" + " " + " " + path);
+            return true;
+        }
+        return false;
+        /*ArrayList<Coordinate> waterStates = worldModel.getObjectsTiles('~');
         if (waterStates.size() == 0) {
             return false;
         }
         for (Coordinate coordinate : waterStates) {
             ArrayList<State> path = Explore.findPath(
-                    new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, false, false, hasAxe, false, false, 0),
+                    new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, false, -Integer.MAX_VALUE),
                     coordinate,
                     worldModel,
                     false,
@@ -164,7 +199,7 @@ public class Agent {
                 return true;
             }
         }
-        return false;
+        return false;*/
     }
 
     /*private boolean bomberman() {
@@ -184,10 +219,7 @@ public class Agent {
         ArrayList<Character> actions = Explore.generateActions(path, worldModel);
         System.out.println(actions);
         moveBuffer = actions;
-        if (moveBuffer.isEmpty()) {
-            return false;
-        }
-        return true;
+        return !moveBuffer.isEmpty();
     }
 
     public char get_action( char view[][] ) {
@@ -202,7 +234,7 @@ public class Agent {
                     }
                 }
             }
-            if (moveBuffer.isEmpty() || priority > 1) {
+            if (!onRaft && (moveBuffer.isEmpty() || priority > 1)) {
                 System.out.println("COLLECT");
                 if (collect()) {
                     priority = 1;
@@ -210,59 +242,74 @@ public class Agent {
             }
             if (moveBuffer.isEmpty()) {
                 System.out.println("EXPLORE");
-                if (explore(true, false)) {
+                if (explore(true, false, false)) {
                     priority = 2;
                 }
             }
+            if (moveBuffer.isEmpty()) {
+                priority = 9;
+                currentStage = Stage.PLANNED;
+            }
         }
-        if (moveBuffer.isEmpty()) {
-            priority = 9;
-            currentStage = Stage.PLANNED;
-        }
+
         if (currentStage == Stage.PLANNED) {
             if (moveBuffer.isEmpty()) {
                 System.out.println("SOLUTION EXPLORE");
                 solutionExplore();
             }
-        }
-
-        if (moveBuffer.isEmpty())  {
-            priority = 9;
-            currentStage = Stage.UNSAFE;
+            if (moveBuffer.isEmpty())  {
+                priority = 9;
+                currentStage = Stage.UNSAFE;
+            }
         }
 
         if (currentStage == Stage.UNSAFE) {
-            if (moveBuffer.isEmpty() && !onRaft) {
+            if (moveBuffer.isEmpty() && !hasRaft && !onRaft) {
+                System.out.println("GET RAFT");
+                if (getRaft()) {    // if we cut down a tree to get a raft, try to explore new areas before using the raft
+                    //hasRaft = true;
+                    currentStage = Stage.EXPLORE;
+                    priority = 9;
+                }
+            }
+            if (moveBuffer.isEmpty() && hasRaft && !onRaft) {
                 System.out.println("GO TO WATER");
                 goToWater();
             }
             if (moveBuffer.isEmpty() && onRaft) {
                 System.out.println("WATER EXPLORE");
-                if (explore(false, true)) {
-                    priority = 0;
-                }
+                explore(false, true, false);
             }
-        }
-        /*if (moveBuffer.isEmpty()) {
-            priority = 9;
-            currentStage = Stage.BOMBERMAN;
-        }
-
-        if (currentStage == Stage.BOMBERMAN) {
             if (moveBuffer.isEmpty()) {
-                System.out.println("BOMBERMAN");
-                bomberman();
+                priority = 9;
+                currentStage = Stage.EXPLORE;
             }
-        }*/
+        }
 
-
-        if (moveBuffer.isEmpty()) {
+        if (moveBuffer.isEmpty() && noop) {
             priority = 9;
-            currentStage = Stage.EXPLORE;
-            moveBuffer.add('0');
+            currentStage = Stage.LUMBERJACK;
+        }
+
+        if (currentStage == Stage.LUMBERJACK) {
+            if (moveBuffer.isEmpty()) {
+                System.out.println("LUMBERJACK EXPLORE");
+                explore(false, false, true);
+            }
+            if (moveBuffer.isEmpty())  {
+                priority = 9;
+                currentStage = Stage.EXPLORE;
+            }
         }
 
         System.out.println("MOVE GENERATION ITERATION OVER");
+
+        if (moveBuffer.isEmpty()) {
+            moveBuffer.add('0');
+            noop = true;
+        } else {
+            noop = false;
+        }
 
         char ch = moveBuffer.remove(0);
 

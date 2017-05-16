@@ -16,6 +16,7 @@ public class State implements Comparable<State> {
 
     private boolean hasGold, hasKey, hasAxe, hasRaft, onRaft;
     private int dynamiteCount;
+    private int distance;
 	
 	private State parent;
 
@@ -76,18 +77,18 @@ public class State implements Comparable<State> {
 	    return blockadesRemoved;
     }
 
-    public ArrayList<State> generateNeighbors(WorldModel worldModel, boolean waterMode) {
+    public ArrayList<State> generateNeighbors(WorldModel worldModel, boolean waterMode, boolean lumberjackMode) {
         ArrayList<State> newStates = new ArrayList<>();
-        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey, new HashSet<>(), waterMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
             newStates.add(new State(relativeCoordX - 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey, new HashSet<>(), waterMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
             newStates.add(new State(relativeCoordX, relativeCoordY - 1, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey, new HashSet<>(), waterMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
             newStates.add(new State(relativeCoordX + 1, relativeCoordY, 'N'));
         }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey, new HashSet<>(), waterMode)) {
+        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey, new HashSet<>(), waterMode, lumberjackMode)) {
             newStates.add(new State(relativeCoordX, relativeCoordY + 1, 'N'));
         }
         return newStates;
@@ -170,7 +171,7 @@ public class State implements Comparable<State> {
 
     public int heuristic(Coordinate goalState, WorldModel worldModel) {
         int minDynamiteDistance = 0;
-        if (dynamiteCount < 0) {
+        if (dynamiteCount < 0 && dynamiteCount > -20000) {
             minDynamiteDistance = worldModel.getMinDynamiteDistance(relativeCoordX, relativeCoordY);
         }
         return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + minDynamiteDistance;
@@ -262,7 +263,7 @@ public class State implements Comparable<State> {
                         onRaft,
                         dynamiteCount));
             }                                                                                                               // uncommenting this fucks board 4 for some reason
-            else if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T' /*&& !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))*/) {
+            else if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
@@ -358,6 +359,10 @@ public class State implements Comparable<State> {
                         dynamiteCount + 1));
             }
             else if (!worldModel.agentBlocked(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved)) {
+                boolean steppingOutOfWater = false;
+                if (worldModel.getObjectAtCoordinate(relativeCoordX, relativeCoordY) == '~') {  // if the agent cut down a tree while in the water, then stepped right out of the water, make sure to remove raft
+                    steppingOutOfWater = true;
+                }
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
@@ -366,7 +371,7 @@ public class State implements Comparable<State> {
                         hasGold,
                         hasKey,
                         hasAxe,
-                        hasRaft,
+                        !steppingOutOfWater && hasRaft,
                         false,
                         dynamiteCount));
             }
@@ -377,5 +382,13 @@ public class State implements Comparable<State> {
 
     public int getDynamiteCount() {
         return dynamiteCount;
+    }
+
+    public void setDistance(int distance) {
+        this.distance = distance;
+    }
+
+    public int getDistance() {
+        return distance;
     }
 }
