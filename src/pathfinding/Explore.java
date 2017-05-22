@@ -51,21 +51,17 @@ public class Explore {
      * @param stage which stage the agent is currently in
      * @return a list of states forming a path from the start state to the goal state, empty list if no path is found
      */
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, Agent.Stage stage) {
-        long startTime = System.currentTimeMillis();
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, Agent.Stage stage, ArrayList<Coordinate> legalDynamiteCoordinates) {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
 
         openSet.add(startState);
 
-        startState.setH(startState.heuristic(goalState, worldModel));
+        startState.setH(startState.heuristic(goalState, worldModel, stage));
 
         startState.setG(0);
 
-        while (!openSet.isEmpty()) {
-            /*if (System.currentTimeMillis() - startTime > 5000) {
-                return new ArrayList<>();
-            }*/
+        while (!openSet.isEmpty() && closedSet.size() < 25000) {
             State bestState = null;
             int bestStateF = Integer.MAX_VALUE;
             for (State state : openSet) {
@@ -75,7 +71,7 @@ public class Explore {
                 }
             }
             State currentState = bestState;
-                if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y && (currentState.getDynamiteCount() >= 0 || currentState.getDynamiteCount() < -WorldModel.WORLD_HEIGHT*WorldModel.WORLD_WIDTH)) {
+            if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y && (currentState.getDynamiteCount() >= 0 || currentState.getDynamiteCount() < -WorldModel.WORLD_HEIGHT*WorldModel.WORLD_WIDTH)) {
                 ArrayList<State> path = new ArrayList<>();
                 path.add(currentState);
                 while (currentState.getParent() != null) {
@@ -89,15 +85,16 @@ public class Explore {
             closedSet.add(currentState);
 
             ArrayList<State> neighborStates;
-            neighborStates = currentState.generateAStarNeighbors(worldModel, stage);
+            neighborStates = currentState.generateAStarNeighbors(worldModel, stage, legalDynamiteCoordinates);
 
             for (State state : neighborStates) {
                 if (closedSet.contains(state)) {
                     continue;
                 }
-                int tentativeGScore = currentState.getG() + 1;
+                int tentativeGScore;
+                tentativeGScore = currentState.getG() + 1;
                 if (!openSet.contains(state)) {
-                    state.setH(state.heuristic(goalState, worldModel));
+                    state.setH(state.heuristic(goalState, worldModel, stage));
                     openSet.add(state);
                 } else {
                     for (State ss : openSet) {  // if we generate a duplicate state, make sure we use the old one
@@ -152,6 +149,9 @@ public class Explore {
                     bestCoordinateValue = state.getG();
                 }
             }
+            if (bestState == null) {
+                return new ArrayList<>();
+            }
             if (worldModel.getObjectAtCoordinate(bestState.getRelativeCoordX(), bestState.getRelativeCoordY()) == type) {
                 ArrayList<State> path = new ArrayList<>();
                 path.add(bestState);
@@ -174,6 +174,62 @@ public class Explore {
             }
         }
         return new ArrayList<>();
+    }
+
+    public static ArrayList<Coordinate> leastDynamitePath(State startState, Coordinate goalState, WorldModel worldModel) {
+        ArrayList<Coordinate> coordinates = worldModel.getExploredTiles();
+        ArrayList<State> states = new ArrayList<>();
+
+        for (Coordinate coordinate : coordinates) {
+            State state = new State(coordinate.x, coordinate.y, 'N');
+            state.setG(Integer.MAX_VALUE);
+            states.add(state);
+        }
+
+        startState.setG(0);
+        states.add(startState);
+
+        while (!states.isEmpty()) {
+            State bestState = null;
+            int bestStateValue = Integer.MAX_VALUE;
+            for (State state : states) {
+                if (state.getG() < bestStateValue) {
+                    bestState = state;
+                    bestStateValue = state.getG();
+                }
+            }
+            if (bestState.getRelativeCoordX() == goalState.x && bestState.getRelativeCoordY() == goalState.y) {
+                ArrayList<Coordinate> dynamiteCoordinates = new ArrayList<>();
+                if (worldModel.getObjectAtCoordinate(bestState.getRelativeCoordX(), bestState.getRelativeCoordY()) == '*') {
+                    dynamiteCoordinates.add(new Coordinate(bestState.getRelativeCoordX(), bestState.getRelativeCoordY()));
+                }
+                while (bestState.getParent() != null) {
+                    if (worldModel.getObjectAtCoordinate(bestState.getParent().getRelativeCoordX(), bestState.getParent().getRelativeCoordY()) == '*') {
+                        dynamiteCoordinates.add(new Coordinate(bestState.getParent().getRelativeCoordX(), bestState.getParent().getRelativeCoordY()));
+                    }
+                    bestState = bestState.getParent();
+                }
+                return dynamiteCoordinates;
+                //return (int) Math.floor(bestState.getG() / 1000);
+            }
+            states.remove(bestState);
+            for (State state : states) {
+                if (bestState.getRelativeCoordX() == state.getRelativeCoordX() && Math.abs(bestState.getRelativeCoordY() - state.getRelativeCoordY()) == 1 ||
+                        bestState.getRelativeCoordY() == state.getRelativeCoordY() && Math.abs(bestState.getRelativeCoordX() - state.getRelativeCoordX()) == 1) {
+                    int alt;
+                    if (worldModel.getObjectAtCoordinate(state.getRelativeCoordX(), state.getRelativeCoordY()) == '*') {
+                        alt = bestState.getG() + 1000;
+                    } else {
+                        alt = bestState.getG() + 1;
+                    }
+                    if (alt < state.getG()) {
+                        state.setG(alt);
+                        state.setParent(bestState);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**

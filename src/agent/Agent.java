@@ -4,9 +4,7 @@ import pathfinding.Coordinate;
 import pathfinding.Explore;
 import pathfinding.State;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +40,16 @@ public class Agent {
     private boolean noop;
 
     /**
+     * If the agent has gone through the WATER stage yet.
+     */
+    private boolean hasExploredWater;
+
+    /**
+     * If the agent has gone through the BOMBERMAN stage yet.
+     */
+    private boolean hasBeenBomberman;
+
+    /**
      * A list containing all the moves the agent currently has planned.
      */
     private ArrayList<Character> moveBuffer;
@@ -62,7 +70,7 @@ public class Agent {
      * In the LUMBERJACK stage, the agent will try to explore the map using as much wood as necessary.
      */
     public enum Stage {
-        SAFE, PLANNED, WATER, LUMBERJACK
+        SAFE, PLANNED, WATER, LUMBERJACK, BOMBERMAN
     }
 
     /**
@@ -105,7 +113,8 @@ public class Agent {
                 new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, stage == Stage.WATER || (stage == Stage.LUMBERJACK && onRaft), dynamiteCount),
                 new Coordinate(unexploredTile.getRelativeCoordX(), unexploredTile.getRelativeCoordY()),
                 worldModel,
-                stage);
+                stage,
+                null);
 
         System.out.println(path);
 
@@ -121,12 +130,9 @@ public class Agent {
     private boolean collect() {
         ArrayList<Character> objects = new ArrayList<>(Arrays.asList('$', 'k', 'd', 'a'));  // the priority order for objects
         for (Character objectType : objects) {                  // for each object type
-            System.out.println(objectType);
             ArrayList<Coordinate> tiles = worldModel.getObjectsTiles(objectType);     // find all tiles containing given object
-            System.out.println(tiles);
             if (!tiles.isEmpty()) {                             // if a tile containing given object type was found
                 for (Coordinate coordinate : tiles) {                     // check each tile found to see if there is a path there from current position
-                    System.out.println(coordinate);
                     if (coordinate.x == relativeCoordX && coordinate.y == relativeCoordY) {
                         continue;   // the world model doesn't get updated until the agent actually moves, so when the agent picks up an item, the world model thinks the item is still there
                     }               // this makes sure the agent actually moves after picking up an item to allow the world model to update
@@ -134,7 +140,8 @@ public class Agent {
                             new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                             coordinate,
                             worldModel,
-                            Stage.SAFE);
+                            Stage.SAFE,
+                            null);
                     if (path.size() != 0) {     // if the returned path is not empty, a path was found
                         moveBuffer = Explore.generateActions(path, worldModel);
                         System.out.println("MOVE BUFFER " + moveBuffer);
@@ -154,41 +161,50 @@ public class Agent {
      * to the number of dynamite the agent currently has. For example: The agent has 2 dynamite and there are 3 more in the world.
      * The method will loop from -3 to 2 (inclusive) and try to find a path with that many dynamite (trying to find a path with -3
      * dynamites means that the agent has to pick up 3 dynamite before being in a valid goal state).
-     * After this, the method uses the goal state of the previous search as the start state for the search for a path home.
+     * After this, the method uses the goal state of the search for the gold as the start state for the search for a path home.
      */
     private void solutionExplore() {
         ArrayList<Coordinate> goldStates = worldModel.getObjectsTiles('$');
         if (goldStates.size() == 0) {
             return;
         }
+
         for (Coordinate coordinate : goldStates) {
-            int dynamiteAvailable = worldModel.getAvailableDynamite();  // finds the number of known dynamites in the world
-            ArrayList<State> path = null;
+            ArrayList<Coordinate> leastDynamite = Explore.leastDynamitePath(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation), goldStates.get(0), worldModel);
+            if (leastDynamite == null) {
+                continue;
+            }
+            int leastDynamiteCount = leastDynamite.size();
+            int dynamiteAvailable = worldModel.getAvailableDynamiteCount(relativeCoordX, relativeCoordY);  // finds the number of known dynamites in the world
+            if (leastDynamiteCount > dynamiteCount + dynamiteAvailable) {
+                return;
+            }
+            if (hasBeenBomberman) {     // if you have been bomberman, the map is likely very large. Don't bother searching for a solution where you have to pick up a dynamite along the way. Takes too long.
+                dynamiteAvailable = 0;
+            }
             for (int i = -dynamiteAvailable; i <= dynamiteCount; i++) {    // tries to find a path to the gold using as few dynamite as possible
-                path = Explore.findPath(                                                        // starts with -dynamiteAvailable, meaning you have to pick up dynamites before going to the gold
-                        new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, i),
+                ArrayList<State> path = Explore.findPath(                                                        // starts with -dynamiteAvailable, meaning you have to pick up dynamites before going to the gold
+                        new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), new Coordinate(relativeCoordX, relativeCoordY), hasGold, hasKey, hasAxe, hasRaft, onRaft, i),
                         coordinate,
                         worldModel,
-                        Stage.PLANNED);
+                        Stage.PLANNED,
+                        hasBeenBomberman ? leastDynamite : null);
                 if (path.size() != 0) {
-                    dynamiteAvailable = dynamiteCount - i;      // however many dynamite are left is how many we will have to get from the gold to the start position
-                    break;
-                }
-            }
-            if (path != null && path.size() != 0) {     // if the returned path is not empty, a path was found
-                State startState = path.get(path.size() - 1);
-                startState.setDynamiteCount(dynamiteAvailable);
-                ArrayList<State> path2 = Explore.findPath(
-                        startState,
-                        new Coordinate(0, 0),
-                        worldModel,
-                        Stage.PLANNED);
-                if (path2.size() != 0) {
-                    moveBuffer = Explore.generateActions(path2, worldModel);
-                    System.out.println("MOVE BUFFER " + moveBuffer);
-                    System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
-                    System.out.println("$$$" + " " + coordinate + " " + path2);
-                    return;
+                    State startState = path.get(path.size() - 1);
+                    startState.setDynamiteCount(dynamiteCount - i); // however many dynamite are left is how many we will have to get from the gold to the start position
+                    ArrayList<State> path2 = Explore.findPath(
+                            startState,
+                            new Coordinate(0, 0),
+                            worldModel,
+                            Stage.PLANNED,
+                            null);
+                    if (path2.size() != 0) {
+                        moveBuffer = Explore.generateActions(path2, worldModel);
+                        System.out.println("MOVE BUFFER " + moveBuffer);
+                        System.out.println("Agent: " + relativeCoordX + " " + relativeCoordY + " " + relativeAgentOrientation);
+                        System.out.println("$$$" + " " + coordinate + " " + path2);
+                        return;
+                    }
                 }
             }
         }
@@ -209,7 +225,8 @@ public class Agent {
                     new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, false, false, -Integer.MAX_VALUE),
                     coordinate,
                     worldModel,
-                    Stage.PLANNED);
+                    Stage.PLANNED,
+                    null);
             if (path.size() != 0) {     // if the returned path is not empty, a path was found
                 moveBuffer = Explore.generateActions(path, worldModel);
                 System.out.println("MOVE BUFFER " + moveBuffer);
@@ -235,6 +252,43 @@ public class Agent {
     }
 
     /**
+     * Tries to find a path to a dynamite using as few dynamite as possible. The hope is to have a net gain of dynamite (blow up one wall to get two dynamite)
+     * and thus simplifying the search space for the gold/goal
+     *
+     * @return true if a path was found, false otherwise
+     */
+    private boolean bomberman() {
+        ArrayList<Coordinate> dynamites = worldModel.getAllDynamites(new HashSet<>());
+        for (Coordinate dynamite : dynamites) {
+            if (dynamite.x == relativeCoordX && dynamite.y == relativeCoordY) {
+                continue;
+            }
+            ArrayList<Coordinate> dynamiteCoordinates = Explore.leastDynamitePath(new State(relativeCoordX, relativeCoordY, relativeAgentOrientation), dynamite, worldModel);
+            if (dynamiteCoordinates == null) {
+                continue;
+            }
+            if (dynamiteCoordinates.size() <= dynamiteCount) {
+                ArrayList<State> path = Explore.findPath(
+                        new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
+                        dynamite,
+                        worldModel,
+                        Stage.BOMBERMAN,
+                        dynamiteCoordinates);
+
+                System.out.println(path);
+
+                if (path.size() != 0) {
+                    ArrayList<Character> actions = Explore.generateActions(path, worldModel);
+                    System.out.println(actions);
+                    moveBuffer = actions;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Tries to find a path home.
      * @return true if a path was found, false otherwise
      */
@@ -243,7 +297,8 @@ public class Agent {
                 new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
                 new Coordinate(0, 0),
                 worldModel,
-                Stage.PLANNED);
+                Stage.PLANNED,
+                null);
 
         System.out.println(path);
 
@@ -257,27 +312,32 @@ public class Agent {
      * Updates the move buffer if necessary, then performs an action and updates the agent's state depending on the action.
      *
      * How the agent chooses what to do next:
-     * Start in SAFE stage.
-     * If I have the gold and I can get home: Go home.
-     * If I can safely collect an item: Collect the item.
-     * If I can find somewhere to safely explore: Explore.
-     *
-     * If the move buffer is empty, go to the PLANNED stage.
-     *
-     * If I can find a path from my current position to the gold to home: Do that.
-     *
-     * If the move buffer is empty, go to the WATER stage.
-     *
-     * If I can get a raft: Get the raft.
-     * If I have a raft and can get to water: Go to the water.
-     * If I am on the water: Explore, don't leave the water.
-     *
-     * If the move buffer is empty and noop is false, set noop to true and to to the SAFE stage.
-     * If the move buffer is empty and noop is true, to to the LUMBERJACK stage.
-     *
-     * If I can find somewhere to explore by cutting down trees and using rafts: Explore.
-     *
-     * If the move buffer is empty, go to the SAFE stage.
+     *  Start in SAFE stage.
+     *  If move buffer is not empty:
+     *      Choose next move from move buffer
+     *  If move buffer is empty, generate new moves: (when a move is found, put it in the move buffer and stop looking for moves)
+     *      If currently in SAFE stage:
+     *          If I have the gold and I can get home: Go home.
+     *          If I can safely collect an item: Collect the item.
+     *          If I can find somewhere to safely explore: Explore.
+     *          Set currentStage to the PLANNED stage.
+     *      If currently in the PLANNED stage:
+     *          If I can find a path from my current position to the gold to home: Do that.
+     *          Set currentStage to the WATER stage.
+     *      If I haven't been to the WATER stage yet and currently in the WATER stage:
+     *          If I can get a raft: Get the raft.
+     *          If I have a raft and can get to water: Go to the water.
+     *          If I am on the water: Explore, don't leave the water.
+     *          Set currentStage to the SAFE stage.
+     *      If noop variable is true, go to the LUMBERJACK stage.
+     *      If currently in the LUMBERJACK stage:
+     *          If I can find somewhere to explore using anything but dynamite: Explore.
+     *          Set currentStage to the BOMBERMAN stage
+     *      If currently in the BOMBERMAN stage:
+     *          If I can reach a dynamite, get the dynamite.
+     *          Set currentStage to the SAFE stage
+     *      Add no-op move to move buffer
+     *      Set noop variable to true
      *
      * @param view what the agent perceived after the last action
      * @return the next action the agent is to perform
@@ -315,14 +375,14 @@ public class Agent {
         if (currentStage == Stage.PLANNED) {
             if (moveBuffer.isEmpty()) {
                 System.out.println("SOLUTION EXPLORE");
-                solutionExplore();
+                    solutionExplore();
             }
             if (moveBuffer.isEmpty())  {
                 currentStage = Stage.WATER;
             }
         }
 
-        if (currentStage == Stage.WATER) {
+        if (!hasExploredWater && currentStage == Stage.WATER) {
             if (moveBuffer.isEmpty() && !hasRaft && !onRaft) {
                 System.out.println("GET RAFT");
                 if (getRaft()) {    // if we cut down a tree to get a raft, try to explore new areas before using the raft
@@ -338,6 +398,7 @@ public class Agent {
                 explore(Stage.WATER);
             }
             if (moveBuffer.isEmpty()) {
+                hasExploredWater = true;
                 currentStage = Stage.SAFE;
             }
         }
@@ -353,11 +414,23 @@ public class Agent {
                 explore(Stage.LUMBERJACK);
             }
             if (moveBuffer.isEmpty())  {
-                currentStage = Stage.SAFE;
+                currentStage = Stage.BOMBERMAN;
             }
         }
 
-        System.out.println("MOVE GENERATION ITERATION OVER");
+        if (currentStage == Stage.BOMBERMAN) {
+            hasBeenBomberman = true;
+            if (moveBuffer.isEmpty()) {
+                System.out.println("BOMBERMAN");
+                if (bomberman()) {
+                    currentStage = Stage.SAFE;
+                }
+            }
+
+            if (moveBuffer.isEmpty())  {
+                currentStage = Stage.SAFE;
+            }
+        }
 
         if (moveBuffer.isEmpty()) {
             moveBuffer.add('0');
@@ -392,6 +465,9 @@ public class Agent {
                 }
                 if (objectInFront != '~' && objectInFront != '.') {
                     onRaft = false;
+                    if (worldModel.getObjectAtCoordinate(relativeCoordX, relativeCoordY) == '~') {
+                        hasRaft = false;    // if you cut down a tree right before stepping out of water, remove the tree from inventory
+                    }
                 }
                 relativeCoordX += State.xOffset.get(relativeAgentOrientation);
                 relativeCoordY += State.yOffset.get(relativeAgentOrientation);

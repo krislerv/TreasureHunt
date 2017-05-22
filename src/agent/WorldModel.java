@@ -78,7 +78,7 @@ public class WorldModel {
                 }
             }
         }
-        printWorld(relativeCoordX, relativeCoordY, relativeAgentOrientation);
+        //printWorld(relativeCoordX, relativeCoordY, relativeAgentOrientation);
     }
 
     /**
@@ -282,11 +282,11 @@ public class WorldModel {
      *
      * @return the number of known dynamites in the world
      */
-    int getAvailableDynamite() {
+    int getAvailableDynamiteCount(int relativeCoordX, int relativeCoordY) {
         int availableDynamite = 0;
         for (int i = minExploredY - WORLD_HEIGHT/2; i < maxExploredY - WORLD_HEIGHT/2 + 1; i++) {
             for (int j = minExploredX - WORLD_WIDTH/2; j < maxExploredX - WORLD_WIDTH/2 + 1; j++) {
-                if (getObjectAtCoordinate(j, i) == 'd') {
+                if (getObjectAtCoordinate(j, i) == 'd' && !(j == relativeCoordX && i == relativeCoordY)) {
                     availableDynamite++;
                 }
             }
@@ -301,11 +301,11 @@ public class WorldModel {
      * @param relativeCoordY the relative y coordinate
      * @return the manhattan distance to the closest known dynamite in the world
      */
-    public int getMinDynamiteDistance(int relativeCoordX, int relativeCoordY) {
+    public int getMinDynamiteDistance(int relativeCoordX, int relativeCoordY, HashSet<Coordinate> blockadesRemoved) {
         int minDynamiteDistance = 999;
         for (int i = minExploredY - WORLD_HEIGHT/2; i < maxExploredY - WORLD_HEIGHT/2 + 1; i++) {
             for (int j = minExploredX - WORLD_WIDTH/2; j < maxExploredX - WORLD_WIDTH/2 + 1; j++) {
-                if (getObjectAtCoordinate(j, i) == 'd') {
+                if (getObjectAtCoordinate(j, i) == 'd'  && ! blockadesRemoved.contains(new Coordinate(j, i))) {
                     if (Math.abs(relativeCoordX - j) + Math.abs(relativeCoordY - i) < minDynamiteDistance) {
                         minDynamiteDistance = Math.abs(relativeCoordX - j) + Math.abs(relativeCoordY - i);
                     }
@@ -313,5 +313,23 @@ public class WorldModel {
             }
         }
         return minDynamiteDistance;
+    }
+
+    /**
+     * Returns a list with coordinates to every known dynamite.
+     *
+     * @param blockadesRemoved a HashSet of the blockades that have been removed
+     * @return
+     */
+    public ArrayList<Coordinate> getAllDynamites(HashSet<Coordinate> blockadesRemoved) {
+        ArrayList<Coordinate> dynamites = new ArrayList<>();
+        for (int i = minExploredY - WORLD_HEIGHT/2; i < maxExploredY - WORLD_HEIGHT/2 + 1; i++) {
+            for (int j = minExploredX - WORLD_WIDTH/2; j < maxExploredX - WORLD_WIDTH/2 + 1; j++) {
+                if (getObjectAtCoordinate(j, i) == 'd' && ! blockadesRemoved.contains(new Coordinate(j, i))) {
+                    dynamites.add(new Coordinate(j, i));
+                }
+            }
+        }
+        return dynamites;
     }
 }

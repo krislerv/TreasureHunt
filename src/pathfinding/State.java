@@ -110,7 +110,7 @@ public class State {
      * @param relativeCoordY the relative y coordinate of the agent
      * @param relativeAgentOrientation the relative orientation of the agent
      * @param blockadesRemoved a HashSet of the blockades that have been removed
-     * @param newDoorUnlock a new coordinate to be added to blockadesRemoved
+     * @param newBlockade a new coordinate to be added to blockadesRemoved
      * @param hasGold if the agent has collected the gold
      * @param hasKey if the agent has collected the key
      * @param hasAxe if the agent has collected the axe
@@ -118,9 +118,9 @@ public class State {
      * @param onRaft if the agent is on a raft
      * @param dynamiteCount how many dynamites the agent has
      */
-    private State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newDoorUnlock, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, boolean onRaft, int dynamiteCount) {
+    public State(int relativeCoordX, int relativeCoordY, char relativeAgentOrientation, HashSet<Coordinate> blockadesRemoved, Coordinate newBlockade, boolean hasGold, boolean hasKey, boolean hasAxe, boolean hasRaft, boolean onRaft, int dynamiteCount) {
 	    this(relativeCoordX, relativeCoordY, relativeAgentOrientation, blockadesRemoved, hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount);
-        this.blockadesRemoved.add(newDoorUnlock);
+        this.blockadesRemoved.add(newBlockade);
     }
 
 	public int getRelativeCoordX() { return  relativeCoordX; }
@@ -144,32 +144,38 @@ public class State {
     void setH(int h) { this.h = h; }
 
     /**
-     * Returns the F-value of the state to be used in A*
+     * Returns the F-value of the state to be used in A*. The heuristic (greedy) part of the F-value has been emphasized
+     * to favor speed over optimality.
      *
      * @return the F-value of the state to be used in A*
      */
-    int getF() { return g + h; }
+    int getF() { return g + 2*h; }
 
     /**
      * Calculates the heuristic value for the state. Uses the manhattan distance from current position to goal position.
-     * If the agent has a negative amount of dynamite, add onto the heuristic the manhattan distance to the closest dynamite.
-     * The search function is sometimes called in such a way to disallow the use of dynamite or to make the agent collect as
-     * many dynamite as possible.
+     * If the agent is in planned mode, add onto the heuristic the manhattan distance of a path from the agent's position going through every dynamite.
+     * This heuristic is not admissible, but we don't care about an optimal solution.
      *
      * @param goalState the state the algorithm is trying to reach
      * @param worldModel the world model of the agent
      * @return the heuristic value for the state
      */
-    int heuristic(Coordinate goalState, WorldModel worldModel) {
-        int minDynamiteDistance = 0;
-        if (dynamiteCount < 0 && dynamiteCount > -WorldModel.WORLD_HEIGHT*WorldModel.WORLD_WIDTH) {
-            minDynamiteDistance = worldModel.getMinDynamiteDistance(relativeCoordX, relativeCoordY);
+    int heuristic(Coordinate goalState, WorldModel worldModel, Agent.Stage stage) {
+        int dynamiteDistance = 0;
+        if (stage == Agent.Stage.PLANNED) {
+            ArrayList<Coordinate> dynamites = worldModel.getAllDynamites(blockadesRemoved);
+            for (int i = 0; i < dynamites.size() - 1; i++) {
+                dynamiteDistance += Math.abs(dynamites.get(i).x - dynamites.get(i+1).x) + Math.abs(dynamites.get(i).y - dynamites.get(i+1).y);
+            }
+            if (!dynamites.isEmpty()) {
+                dynamiteDistance += Math.abs(dynamites.get(0).x - relativeCoordX) + Math.abs(dynamites.get(0).y - relativeCoordY);
+            }
         }
-        return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + minDynamiteDistance;
+        return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + dynamiteDistance;
     }
 
     /**
-     * Generates neighbor states for use in BFS algorithm
+     * Generates neighbor states for use in BFS algorithm.
      *
      * @param worldModel the world model of the agent
      * @param stage which stage the agent is currently in
@@ -193,14 +199,15 @@ public class State {
     }
 
     /**
-     * Generates neighbor states for use in A* algorithm
+     * Generates neighbor states for use in A* algorithm.
      *
      * @param worldModel the world model of the agent
-     * @param stage which stage the agent is currently in. Safe mode can only move on land and unlock doors.
-     *             Water mode can only move on water. Planned mode can do everything.
+     * @param stage which stage the agent is currently in. Safe mode can only move on land and unlock doors
+     *             Water mode can only move on water. Planned mode can do everything
+     * @param legalDynamiteCoordinates the coordinates the agent  is allowed to blow up. null means any tile can be blown up
      * @return a list of states containing the neighbors of this state
      */
-    ArrayList<State> generateAStarNeighbors(WorldModel worldModel, Agent.Stage stage) {
+    ArrayList<State> generateAStarNeighbors(WorldModel worldModel, Agent.Stage stage, ArrayList<Coordinate> legalDynamiteCoordinates) {
         ArrayList<State> newStates = new ArrayList<>();
         switch (relativeAgentOrientation) {
             case 'N':
@@ -229,7 +236,7 @@ public class State {
                         dynamiteCount));
             }
         }
-        if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.LUMBERJACK) {
+        if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.LUMBERJACK || stage == Agent.Stage.BOMBERMAN) {
             if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
                 newStates.add(new State(
                         relativeCoordX,
@@ -244,7 +251,7 @@ public class State {
                         onRaft,
                         dynamiteCount));
             }
-            else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation))) && !onRaft) {
+            else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation))) && !onRaft && (legalDynamiteCoordinates == null || legalDynamiteCoordinates.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation))))) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
@@ -326,7 +333,7 @@ public class State {
                         dynamiteCount + 1));
             }
         }
-        if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.SAFE  || stage == Agent.Stage.LUMBERJACK) {
+        if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.SAFE  || stage == Agent.Stage.LUMBERJACK || stage == Agent.Stage.BOMBERMAN) {
             if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
                 newStates.add(new State(
                         relativeCoordX,
