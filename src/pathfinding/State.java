@@ -235,7 +235,7 @@ public class State {
                         onRaft,
                         dynamiteCount));
             }
-            else if (dynamiteCount > 0 && objectInFront == '*' && !blockadesRemoved.contains(coordinateInFront) && !onRaft && (legalDynamiteCoordinates == null || legalDynamiteCoordinates.contains(coordinateInFront))) {
+            else if (dynamiteCount > 0 && (objectInFront == '*' || objectInFront == '-' || objectInFront == 'T') && !blockadesRemoved.contains(coordinateInFront) && !onRaft && (legalDynamiteCoordinates == null || legalDynamiteCoordinates.contains(coordinateInFront))) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,

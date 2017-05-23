@@ -516,7 +516,7 @@ public class Agent {
             case 'B':
             case 'b':
                 objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
-                if (objectInFront == '*') {
+                if (objectInFront == '*' || objectInFront == '-' || objectInFront == 'T') {
                     dynamiteCount--;
                 }
                 return ch;
