@@ -86,7 +86,7 @@ public class Agent {
         worldModel = new WorldModel();
         relativeCoordX = 0;
         relativeCoordY = 0;
-        relativeAgentOrientation = 'W'; // we don't know which way we're facing (and it doesn't matter), so just arbitrarily choose the initial direction
+        relativeAgentOrientation = 'N'; // we don't know which way we're facing (and it doesn't matter), so just arbitrarily choose the initial direction
         moveBuffer = new ArrayList<>();
         currentStage = Stage.SAFE;
     }
@@ -98,11 +98,10 @@ public class Agent {
      * @return true if a path was found, false otherwise
      */
     private boolean explore(Stage stage) {
-        State unexploredTile = Explore.findUnexploredTile(
-                new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, onRaft, dynamiteCount),
+        Coordinate unexploredTile = Explore.findUnexploredTile(
+                new Coordinate(relativeCoordX, relativeCoordY),
                 worldModel,
-                relativeCoordX,
-                relativeCoordY,
+                hasKey,
                 stage);
 
         if (unexploredTile == null) {
@@ -111,7 +110,7 @@ public class Agent {
 
         ArrayList<State> path = Explore.findPath(
                 new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), hasGold, hasKey, hasAxe, hasRaft, stage == Stage.WATER || (stage == Stage.LUMBERJACK && onRaft), dynamiteCount),
-                new Coordinate(unexploredTile.getRelativeCoordX(), unexploredTile.getRelativeCoordY()),
+                new Coordinate(unexploredTile.x, unexploredTile.y),
                 worldModel,
                 stage,
                 null);
@@ -130,7 +129,7 @@ public class Agent {
     private boolean collect() {
         ArrayList<Character> objects = new ArrayList<>(Arrays.asList('$', 'k', 'd', 'a'));  // the priority order for objects
         for (Character objectType : objects) {                  // for each object type
-            ArrayList<Coordinate> tiles = worldModel.getObjectsTiles(objectType);     // find all tiles containing given object
+            ArrayList<Coordinate> tiles = worldModel.getObjectTiles(objectType);     // find all tiles containing given object
             if (!tiles.isEmpty()) {                             // if a tile containing given object type was found
                 for (Coordinate coordinate : tiles) {                     // check each tile found to see if there is a path there from current position
                     if (coordinate.x == relativeCoordX && coordinate.y == relativeCoordY) {
@@ -164,7 +163,7 @@ public class Agent {
      * After this, the method uses the goal state of the search for the gold as the start state for the search for a path home.
      */
     private void solutionExplore() {
-        ArrayList<Coordinate> goldStates = worldModel.getObjectsTiles('$');
+        ArrayList<Coordinate> goldStates = worldModel.getObjectTiles('$');
         if (goldStates.size() == 0) {
             return;
         }
@@ -179,9 +178,9 @@ public class Agent {
             if (leastDynamiteCount > dynamiteCount + dynamiteAvailable) {
                 return;
             }
-            if (hasBeenBomberman) {     // if you have been bomberman, the map is likely very large. Don't bother searching for a solution where you have to pick up a dynamite along the way. Takes too long.
+            /*if (hasBeenBomberman) {     // if you have been bomberman, the map is likely very large. Don't bother searching for a solution where you have to pick up a dynamite along the way. Takes too long.
                 dynamiteAvailable = 0;
-            }
+            }*/
             for (int i = -dynamiteAvailable; i <= dynamiteCount; i++) {    // tries to find a path to the gold using as few dynamite as possible
                 ArrayList<State> path = Explore.findPath(                                                        // starts with -dynamiteAvailable, meaning you have to pick up dynamites before going to the gold
                         new State(relativeCoordX, relativeCoordY, relativeAgentOrientation, new HashSet<>(), new Coordinate(relativeCoordX, relativeCoordY), hasGold, hasKey, hasAxe, hasRaft, onRaft, i),

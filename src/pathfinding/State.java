@@ -175,40 +175,17 @@ public class State {
     }
 
     /**
-     * Generates neighbor states for use in BFS algorithm.
-     *
-     * @param worldModel the world model of the agent
-     * @param stage which stage the agent is currently in
-     * @return a list of states containing the neighbors of this state
-     */
-    ArrayList<State> generateBFSNeighbors(WorldModel worldModel, Agent.Stage stage) {
-        ArrayList<State> newStates = new ArrayList<>();
-        if (!worldModel.positionBlocked(relativeCoordX - 1, relativeCoordY, hasKey, new HashSet<>(), stage)) {
-            newStates.add(new State(relativeCoordX - 1, relativeCoordY, 'N'));
-        }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY - 1, hasKey, new HashSet<>(), stage)) {
-            newStates.add(new State(relativeCoordX, relativeCoordY - 1, 'N'));
-        }
-        if (!worldModel.positionBlocked(relativeCoordX + 1, relativeCoordY, hasKey, new HashSet<>(), stage)) {
-            newStates.add(new State(relativeCoordX + 1, relativeCoordY, 'N'));
-        }
-        if (!worldModel.positionBlocked(relativeCoordX, relativeCoordY + 1, hasKey, new HashSet<>(), stage)) {
-            newStates.add(new State(relativeCoordX, relativeCoordY + 1, 'N'));
-        }
-        return newStates;
-    }
-
-    /**
      * Generates neighbor states for use in A* algorithm.
      *
      * @param worldModel the world model of the agent
-     * @param stage which stage the agent is currently in. Safe mode can only move on land and unlock doors
-     *             Water mode can only move on water. Planned mode can do everything
-     * @param legalDynamiteCoordinates the coordinates the agent  is allowed to blow up. null means any tile can be blown up
+     * @param stage which stage the agent is currently in, determines which moves it can make
+     * @param legalDynamiteCoordinates the coordinates the agen is allowed to blow up. A value of null means any tile can be blown up
      * @return a list of states containing the neighbors of this state
      */
     ArrayList<State> generateAStarNeighbors(WorldModel worldModel, Agent.Stage stage, ArrayList<Coordinate> legalDynamiteCoordinates) {
         ArrayList<State> newStates = new ArrayList<>();
+        char objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
+        Coordinate coordinateInFront = new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation));
         switch (relativeAgentOrientation) {
             case 'N':
             case 'S':
@@ -222,7 +199,7 @@ public class State {
                 break;
         }
         if (stage == Agent.Stage.WATER) {
-            if ((hasRaft || onRaft) && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '~') {
+            if ((hasRaft || onRaft) && objectInFront == '~') {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
@@ -237,13 +214,13 @@ public class State {
             }
         }
         if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.LUMBERJACK || stage == Agent.Stage.BOMBERMAN) {
-            if (hasAxe && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'T' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
+            if (hasAxe && objectInFront == 'T' && !blockadesRemoved.contains(coordinateInFront)) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
                         relativeAgentOrientation,
                         blockadesRemoved,
-                        new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                        coordinateInFront,
                         hasGold,
                         hasKey,
                         hasAxe,
@@ -251,13 +228,13 @@ public class State {
                         onRaft,
                         dynamiteCount));
             }
-            else if (dynamiteCount > 0 && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '*' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation))) && !onRaft && (legalDynamiteCoordinates == null || legalDynamiteCoordinates.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation))))) {
+            else if (dynamiteCount > 0 && objectInFront == '*' && !blockadesRemoved.contains(coordinateInFront) && !onRaft && (legalDynamiteCoordinates == null || legalDynamiteCoordinates.contains(coordinateInFront))) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
                         relativeAgentOrientation,
                         blockadesRemoved,
-                        new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                        coordinateInFront,
                         hasGold,
                         hasKey,
                         hasAxe,
@@ -265,7 +242,7 @@ public class State {
                         onRaft,
                         dynamiteCount - 1));
             }
-            else if ((hasRaft || onRaft) && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '~') {
+            else if ((hasRaft || onRaft) && objectInFront == '~') {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
@@ -278,7 +255,7 @@ public class State {
                         true,
                         dynamiteCount));
             }
-            else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '$') {
+            else if (objectInFront == '$') {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
@@ -291,7 +268,7 @@ public class State {
                         false,
                         dynamiteCount));
             }
-            else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'k') {
+            else if (objectInFront == 'k') {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
@@ -304,7 +281,7 @@ public class State {
                         false,
                         dynamiteCount));
             }
-            else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'a') {
+            else if (objectInFront == 'a') {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
@@ -317,14 +294,13 @@ public class State {
                         false,
                         dynamiteCount));
             }
-            else if (worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == 'd' &&
-                    !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
+            else if (objectInFront == 'd' && !blockadesRemoved.contains(coordinateInFront)) {
                 newStates.add(new State(
                         relativeCoordX + xOffset.get(relativeAgentOrientation),
                         relativeCoordY + yOffset.get(relativeAgentOrientation),
                         relativeAgentOrientation,
                         blockadesRemoved,
-                        new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                        coordinateInFront,
                         hasGold,
                         hasKey,
                         hasAxe,
@@ -334,13 +310,13 @@ public class State {
             }
         }
         if (stage == Agent.Stage.PLANNED || stage == Agent.Stage.SAFE  || stage == Agent.Stage.LUMBERJACK || stage == Agent.Stage.BOMBERMAN) {
-            if (hasKey && worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation) == '-' && !blockadesRemoved.contains(new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)))) {
+            if (hasKey && objectInFront == '-' && !blockadesRemoved.contains(coordinateInFront)) {
                 newStates.add(new State(
                         relativeCoordX,
                         relativeCoordY,
                         relativeAgentOrientation,
                         blockadesRemoved,
-                        new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation)),
+                        coordinateInFront,
                         hasGold,
                         hasKey,
                         hasAxe,

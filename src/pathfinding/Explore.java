@@ -10,32 +10,31 @@ public class Explore {
     /**
      * Uses BFS to find an unexplored tile (a tile where, if the agent stood in it, would reveal tiles not yet seen)
 
-     * @param currentState the current state of the agent
+     * @param currentCoordinate the current coordinate of the agent
      * @param worldModel the world model of the agent
-     * @param relativeCoordX the relative x coordinate of the agent
-     * @param relativeCoordY the relative y coordinate of the agent
+     * @param hasKey if the agent has the key
      * @param stage which stage the agent is currently in
      * @return a state that is an unexplored tile, null if no tile is found
      */
-    public static State findUnexploredTile(State currentState, WorldModel worldModel, int relativeCoordX, int relativeCoordY, Agent.Stage stage) {
-        HashSet<State> discovered = new HashSet<>();
-        ArrayList<State> queue = new ArrayList<>();
+    public static Coordinate findUnexploredTile(Coordinate currentCoordinate, WorldModel worldModel, boolean hasKey, Agent.Stage stage) {
+        HashSet<Coordinate> discovered = new HashSet<>();
+        ArrayList<Coordinate> queue = new ArrayList<>();
+        int agentCurrentPositionX = currentCoordinate.x;
+        int agentCurrentPositionY = currentCoordinate.y;
 
-        discovered.add(currentState);
-        queue.add(currentState);
+        discovered.add(currentCoordinate);
+        queue.add(currentCoordinate);
 
         while (!queue.isEmpty()) {
-            currentState = queue.remove(0);
-            if (worldModel.unexplored(currentState) && !(currentState.getRelativeCoordX() == relativeCoordX && currentState.getRelativeCoordY() == relativeCoordY)) {
-                System.out.println("Found unexplored tile " + currentState + " from (" + relativeCoordX + ", " + relativeCoordY + ")");
-                return currentState;
+            currentCoordinate = queue.remove(0);
+            if (worldModel.isUnexplored(currentCoordinate) && !(currentCoordinate.x == agentCurrentPositionX && currentCoordinate.y == agentCurrentPositionY)) {
+                return currentCoordinate;
             }
-            ArrayList<State> neighborStates = currentState.generateBFSNeighbors(worldModel, stage);
-            for (State state : neighborStates) {
-                if (!discovered.contains(state)) {
-                    discovered.add(state);
-                    state.setParent(currentState);
-                    queue.add(state);
+            ArrayList<Coordinate> neighborCoordinates = currentCoordinate.generateBFSNeighbors(worldModel, hasKey, stage);
+            for (Coordinate coordinate : neighborCoordinates) {
+                if (!discovered.contains(coordinate)) {
+                    discovered.add(coordinate);
+                    queue.add(coordinate);
                 }
             }
         }
@@ -54,6 +53,7 @@ public class Explore {
     public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, Agent.Stage stage, ArrayList<Coordinate> legalDynamiteCoordinates) {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
+        int cutoff = 25000;
 
         openSet.add(startState);
 
@@ -61,7 +61,7 @@ public class Explore {
 
         startState.setG(0);
 
-        while (!openSet.isEmpty() && closedSet.size() < 25000) {
+        while (!openSet.isEmpty() && closedSet.size() < cutoff) {
             State bestState = null;
             int bestStateF = Integer.MAX_VALUE;
             for (State state : openSet) {

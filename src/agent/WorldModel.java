@@ -192,13 +192,13 @@ public class WorldModel {
     /**
      * Checks if the given state is unexplored, meaning that there is a question mark in the 5x5 square centered in the state.
      *
-     * @param currentState the given state
+     * @param coordinate the given coordinate
      * @return true if the state is unexplored, false otherwise
      */
-    public boolean unexplored(State currentState) {
+    public boolean isUnexplored(Coordinate coordinate) {
         for (int i = 0; i < 5; i++) {
             for (int j = 0; j < 5; j++) {
-                if (world.get(baseCoordY + currentState.getRelativeCoordY() + i - 2).get(baseCoordX + currentState.getRelativeCoordX() + j - 2) == '?') {   // if there is a question mark in the 5x5 area around tile
+                if (world.get(baseCoordY + coordinate.y + i - 2).get(baseCoordX + coordinate.x + j - 2) == '?') {   // if there is a question mark in the 5x5 area around tile
                     return true;
                 }
             }
@@ -212,7 +212,7 @@ public class WorldModel {
      * @param objectType which object to search for
      * @return list with coordinates of all tiles with the given object
      */
-    ArrayList<Coordinate> getObjectsTiles(Character objectType) {
+    ArrayList<Coordinate> getObjectTiles(Character objectType) {
         ArrayList<Coordinate> objectTiles = new ArrayList<>();
         for (int i = minExploredY; i < maxExploredY + 1; i++) {
             for (int j = minExploredX; j < maxExploredX + 1; j++) {
@@ -232,7 +232,7 @@ public class WorldModel {
      * @return list with coordinates of all tiles with the given object
      */
     ArrayList<Coordinate> getObjectsTilesSortedByDistance(Character objectType, State currentState) {
-        ArrayList<Coordinate> objectTiles = getObjectsTiles(objectType);
+        ArrayList<Coordinate> objectTiles = getObjectTiles(objectType);
         objectTiles.sort(Comparator.comparingInt(c -> (Math.abs(c.x - currentState.getRelativeCoordX()) + Math.abs(c.y - currentState.getRelativeCoordY()))));
         return objectTiles;
     }
@@ -295,37 +295,16 @@ public class WorldModel {
     }
 
     /**
-     * Returns the manhattan distance to the closest known dynamite in the world.
-     *
-     * @param relativeCoordX the relative x coordinate
-     * @param relativeCoordY the relative y coordinate
-     * @return the manhattan distance to the closest known dynamite in the world
-     */
-    public int getMinDynamiteDistance(int relativeCoordX, int relativeCoordY, HashSet<Coordinate> blockadesRemoved) {
-        int minDynamiteDistance = 999;
-        for (int i = minExploredY - WORLD_HEIGHT/2; i < maxExploredY - WORLD_HEIGHT/2 + 1; i++) {
-            for (int j = minExploredX - WORLD_WIDTH/2; j < maxExploredX - WORLD_WIDTH/2 + 1; j++) {
-                if (getObjectAtCoordinate(j, i) == 'd'  && ! blockadesRemoved.contains(new Coordinate(j, i))) {
-                    if (Math.abs(relativeCoordX - j) + Math.abs(relativeCoordY - i) < minDynamiteDistance) {
-                        minDynamiteDistance = Math.abs(relativeCoordX - j) + Math.abs(relativeCoordY - i);
-                    }
-                }
-            }
-        }
-        return minDynamiteDistance;
-    }
-
-    /**
      * Returns a list with coordinates to every known dynamite.
      *
      * @param blockadesRemoved a HashSet of the blockades that have been removed
-     * @return
+     * @return a list with coordinates to every known dynamite
      */
     public ArrayList<Coordinate> getAllDynamites(HashSet<Coordinate> blockadesRemoved) {
         ArrayList<Coordinate> dynamites = new ArrayList<>();
         for (int i = minExploredY - WORLD_HEIGHT/2; i < maxExploredY - WORLD_HEIGHT/2 + 1; i++) {
             for (int j = minExploredX - WORLD_WIDTH/2; j < maxExploredX - WORLD_WIDTH/2 + 1; j++) {
-                if (getObjectAtCoordinate(j, i) == 'd' && ! blockadesRemoved.contains(new Coordinate(j, i))) {
+                if (getObjectAtCoordinate(j, i) == 'd' && !blockadesRemoved.contains(new Coordinate(j, i))) {
                     dynamites.add(new Coordinate(j, i));
                 }
             }
