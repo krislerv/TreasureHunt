@@ -129,6 +129,8 @@ public class State {
 
     char getRelativeAgentOrientation() { return relativeAgentOrientation; }
 
+    boolean hasGold() { return hasGold; }
+
     int getDynamiteCount() { return dynamiteCount; }
 
     public void setDynamiteCount(int dynamiteCount) { this.dynamiteCount = dynamiteCount; }
@@ -160,7 +162,7 @@ public class State {
      * @param worldModel the world model of the agent
      * @return the heuristic value for the state
      */
-    int heuristic(Coordinate goalState, WorldModel worldModel, Agent.Stage stage) {
+    int heuristic(Coordinate goalState, WorldModel worldModel, Agent.Stage stage, Coordinate goldState) {
         int dynamiteDistance = 0;
         if (stage == Agent.Stage.PLANNED) {
             ArrayList<Coordinate> dynamites = worldModel.getAllDynamites(blockadesRemoved);
@@ -171,7 +173,11 @@ public class State {
                 dynamiteDistance += Math.abs(dynamites.get(0).x - relativeCoordX) + Math.abs(dynamites.get(0).y - relativeCoordY);
             }
         }
-        return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + dynamiteDistance;
+        if (goldState == null || hasGold) {
+            return Math.abs(goalState.x - relativeCoordX) + Math.abs(goalState.y - relativeCoordY) + dynamiteDistance;
+        } else {
+            return Math.abs(goalState.x - goldState.x) + Math.abs(goalState.y - goldState.y)  + 5*(dynamiteDistance + Math.abs(relativeCoordX - goldState.x) + Math.abs(relativeCoordY - goldState.y));
+        }
     }
 
     /**
@@ -186,6 +192,7 @@ public class State {
         ArrayList<State> newStates = new ArrayList<>();
         char objectInFront = worldModel.getObjectInFront(relativeCoordX, relativeCoordY, relativeAgentOrientation);
         Coordinate coordinateInFront = new Coordinate(relativeCoordX + xOffset.get(relativeAgentOrientation), relativeCoordY + yOffset.get(relativeAgentOrientation));
+
         switch (relativeAgentOrientation) {
             case 'N':
             case 'S':

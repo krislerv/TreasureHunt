@@ -41,6 +41,10 @@ public class Explore {
         return null;
     }
 
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, Agent.Stage stage) {
+        return findPath(startState, goalState, worldModel, stage, null, null);
+    }
+
     /**
      * Uses A* to find the shortest path from startState to goalState
      *
@@ -48,16 +52,18 @@ public class Explore {
      * @param goalState a goal state coordinate
      * @param worldModel the world model of the agent
      * @param stage which stage the agent is currently in
+     * @param legalDynamiteCoordinates list of coordinates that are legal to use dynamite on, null if any coordinate is legal
+     * @param goldState coordinates of the gold state to be used in the heuristic, null if distance to gold state should not be included in heuristic
      * @return a list of states forming a path from the start state to the goal state, empty list if no path is found
      */
-    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, Agent.Stage stage, ArrayList<Coordinate> legalDynamiteCoordinates) {
+    public static ArrayList<State> findPath(State startState, Coordinate goalState, WorldModel worldModel, Agent.Stage stage, ArrayList<Coordinate> legalDynamiteCoordinates, Coordinate goldState) {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
-        int cutoff = 25000;
+        int cutoff = 25000; // the state space of large maps is way too large for us to search the entire thing
 
         openSet.add(startState);
 
-        startState.setH(startState.heuristic(goalState, worldModel, stage));
+        startState.setH(startState.heuristic(goalState, worldModel, stage, goldState));
 
         startState.setG(0);
 
@@ -71,7 +77,12 @@ public class Explore {
                 }
             }
             State currentState = bestState;
-            if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y && (currentState.getDynamiteCount() >= 0 || currentState.getDynamiteCount() < -WorldModel.WORLD_HEIGHT*WorldModel.WORLD_WIDTH)) {
+            if (currentState == null) {
+                return new ArrayList<>();
+            }
+            if (currentState.getRelativeCoordX() == goalState.x && currentState.getRelativeCoordY() == goalState.y &&   // if currentState is in the correct position
+                    (currentState.getDynamiteCount() >= 0 || currentState.getDynamiteCount() < -WorldModel.WORLD_HEIGHT*WorldModel.WORLD_WIDTH) &&  // if the dynamite count is non-negative OR is an extremely low number (meaning using dynamites is banned)
+                    (goldState == null || currentState.hasGold())) {        // if the agent has the gold OR we don't care about the gold
                 ArrayList<State> path = new ArrayList<>();
                 path.add(currentState);
                 while (currentState.getParent() != null) {
@@ -94,12 +105,12 @@ public class Explore {
                 int tentativeGScore;
                 tentativeGScore = currentState.getG() + 1;
                 if (!openSet.contains(state)) {
-                    state.setH(state.heuristic(goalState, worldModel, stage));
+                    state.setH(state.heuristic(goalState, worldModel, stage, goldState));
                     openSet.add(state);
                 } else {
-                    for (State ss : openSet) {  // if we generate a duplicate state, make sure we use the old one
-                        if (ss.equals(state)) {
-                            state = ss;
+                    for (State openSetState : openSet) {  // if we generate a duplicate state, make sure we use the old one
+                        if (openSetState.equals(state)) {
+                            state = openSetState;
                             break;
                         }
                     }
@@ -176,6 +187,15 @@ public class Explore {
         return new ArrayList<>();
     }
 
+    /**
+     * Returns a list of coordinates that were blown up in the least dynamite path from startState to goalState.
+     * Returns null if no path is found.
+     *
+     * @param startState the start state
+     * @param goalState the goal state
+     * @param worldModel the world model of the agent
+     * @return a list of coordinates that were blown up in the least dynamite path from startState to goalState
+     */
     public static ArrayList<Coordinate> leastDynamitePath(State startState, Coordinate goalState, WorldModel worldModel) {
         ArrayList<Coordinate> coordinates = worldModel.getExploredTiles();
         ArrayList<State> states = new ArrayList<>();
@@ -198,6 +218,9 @@ public class Explore {
                     bestStateValue = state.getG();
                 }
             }
+            if (bestState == null) {
+                return null;
+            }
             if (bestState.getRelativeCoordX() == goalState.x && bestState.getRelativeCoordY() == goalState.y) {
                 ArrayList<Coordinate> dynamiteCoordinates = new ArrayList<>();
                 if (worldModel.getObjectAtCoordinate(bestState.getRelativeCoordX(), bestState.getRelativeCoordY()) == '*') {
@@ -210,7 +233,6 @@ public class Explore {
                     bestState = bestState.getParent();
                 }
                 return dynamiteCoordinates;
-                //return (int) Math.floor(bestState.getG() / 1000);
             }
             states.remove(bestState);
             for (State state : states) {
