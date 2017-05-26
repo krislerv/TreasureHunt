@@ -60,7 +60,7 @@ public class Explore {
         HashSet<State> closedSet = new HashSet<>();
         HashSet<State> openSet = new HashSet<>();
         int cutoff = 25000; // the state space of large maps is way too large for us to search the entire thing
-
+        
         openSet.add(startState);
 
         startState.setH(startState.heuristic(goalState, worldModel, stage, goldState));

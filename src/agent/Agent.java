@@ -10,6 +10,49 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 
+/**
+ * The agent's next action is decided by a set of rules, primarily which stage it is in.
+ * The stages are called SAFE, WATER, LUMBERJACK, BOMBERMAN, and PLANNED. In the SAFE
+ * stage the agent safely (using no dynamite and cutting no trees) explores the area it's
+ * in and collects items. In the WATER stage it cuts down a tree and tries to explore the
+ * ocean. In the LUMBERJACK stage it explores the map using as many trees as it wants. In
+ * the BOMBERMAN stage it tries to accumulate dynamite by blowing up walls (i.e. blow up
+ * one wall to get two more dynamite). In the PLANNED stage it tries to plan a path from
+ * its current position to the gold, then to the start position. Basically, the agent
+ * will exhaust its options in one stage, then go to the PLANNED stage, then go to the
+ * next stage. In addition to all this, there are some special rules that are used to
+ * increase performance and solve some edge cases. All these methods generate paths which
+ * are turned into moves (characters that are sent to the Raft.java program). When moves
+ * are executed, the agent also keeps track of what's happening and will update its state
+ * accordingly (i.e. if the agent steps forward and there is a dynamite in front of it,
+ * increment the dynamite counter). The agent's new state then becomes the start state of
+ * new searches.
+ *
+ * The algorithms used are breath-first search, Dijkstra's algorithmn, and A*.
+ * BFS is used to find unexplored tiles to explore. Its implementation is pretty standard,
+ * but a bit simplified since we are not looking for a path, just a single tile.
+ * Dijkstra's algorithm is used to find paths using as few dynamite as possible (useful
+ * in BOMBERMAN and PLANNED) and to find the closest water tile (useful in WATER).
+ * A* is the main pathfinding algorithm used. It is mostly a standard implementation,
+ * but with a few modifications. It has a cutoff point (currently when it has explored
+ * 25000 states) to avoid it running on for a very long time on large maps. Its neighbor
+ * generation method generates neighbors based on what stage the agent is currently in.
+ * For example, if the agent is in the WATER stage, it will only generate neighbor states
+ * where the agent is standing on water. The heuristic used is different depending on the
+ * circumstances. Most of the time it is the manhattan distance. If it is trying to find
+ * a path to the goal, then the heuristic is the sum of the manhattan distance to the
+ * gold (if not collected) plus from the gold to the start state plus the sum of a
+ * (non-optimal) path from the agent through every known dynamite on the map. This
+ * heuristic is not admissible. This was done because we don't care about an optimal path,
+ * we just want to find a viable path as fast as possible. To further speed up the search,
+ * we emphasize the heuristic (greedy) part of the evaluation function. G being the path
+ * cost and H being the heuristic, my evaluation function returns G + 2 * H.
+ * To keep track  of everything, there is the WorldModel class. This class keeps a map
+ * of everything the agent has seen. The State class is used as nodes in the search
+ * algorithms. It keeps track of the agent's position, orientation, inventory, and which
+ * tiles it has blown up/unlocked/chopped down. All this allows the search algorithms to
+ * perform searches where the agent does many different types of actions to find a solution.
+ */
 public class Agent {
 
     /**
